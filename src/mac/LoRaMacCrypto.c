@@ -59,7 +59,11 @@
 /*
  * Number of security context entries
  */
+#ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space.
 #define NUM_OF_SEC_CTX                  5
+#else
+#define NUM_OF_SEC_CTX                  1
+#endif // MODULE_LORAWAN_MULTICAST_ON
 
 /*
  * Size of the module context
@@ -207,10 +211,12 @@ static LoRaMacCryptoNvmCtx_t NvmCryptoCtx;
  */
 static KeyAddr_t KeyAddrList[NUM_OF_SEC_CTX] =
     {
+        #ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space.
         { MULTICAST_0_ADDR, MC_APP_S_KEY_0, MC_NWK_S_KEY_0, MC_KEY_0 },
         { MULTICAST_1_ADDR, MC_APP_S_KEY_1, MC_NWK_S_KEY_1, MC_KEY_1 },
         { MULTICAST_2_ADDR, MC_APP_S_KEY_2, MC_NWK_S_KEY_2, MC_KEY_2 },
         { MULTICAST_3_ADDR, MC_APP_S_KEY_3, MC_NWK_S_KEY_3, MC_KEY_3 },
+        #endif // MODULE_LORAWAN_MULTICAST_ON
         { UNICAST_DEV_ADDR, APP_S_KEY, S_NWK_S_INT_KEY, NO_KEY }
     };
 
@@ -1086,6 +1092,8 @@ LoRaMacCryptoStatus_t LoRaMacCryptoSetKey( KeyIdentifier_t keyID, uint8_t* key )
     {
         return LORAMAC_CRYPTO_ERROR_SECURE_ELEMENT_FUNC;
     }
+
+    #ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space.
     if( keyID == APP_KEY )
     {
         // Derive lifetime keys
@@ -1098,6 +1106,8 @@ LoRaMacCryptoStatus_t LoRaMacCryptoSetKey( KeyIdentifier_t keyID, uint8_t* key )
             return LORAMAC_CRYPTO_ERROR_SECURE_ELEMENT_FUNC;
         }
     }
+    #endif // MODULE_LORAWAN_MULTICAST_ON
+
     return LORAMAC_CRYPTO_SUCCESS;
 }
 
@@ -1305,6 +1315,7 @@ LoRaMacCryptoStatus_t LoRaMacCryptoHandleJoinAccept( JoinReqIdentifier_t joinReq
         return LORAMAC_CRYPTO_FAIL_JOIN_NONCE;
     }
 
+    #ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space.
     // Derive lifetime keys
     retval = LoRaMacCryptoDeriveMcRootKey( versionMinor, APP_KEY );
     if( retval != LORAMAC_CRYPTO_SUCCESS )
@@ -1317,6 +1328,7 @@ LoRaMacCryptoStatus_t LoRaMacCryptoHandleJoinAccept( JoinReqIdentifier_t joinReq
     {
         return retval;
     }
+    #endif // MODULE_LORAWAN_MULTICAST_ON
 
 #if( USE_LRWAN_1_1_X_CRYPTO == 1 )
     if( versionMinor == 1 )
@@ -1582,6 +1594,7 @@ LoRaMacCryptoStatus_t LoRaMacCryptoUnsecureMessage( AddressIdentifier_t addrID, 
     return LORAMAC_CRYPTO_SUCCESS;
 }
 
+#ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space in RAM.
 LoRaMacCryptoStatus_t LoRaMacCryptoDeriveMcRootKey( uint8_t versionMinor, KeyIdentifier_t keyID )
 {
     // Prevent other keys than AppKey
@@ -1667,3 +1680,4 @@ LoRaMacCryptoStatus_t LoRaMacCryptoDeriveMcSessionKeyPair( AddressIdentifier_t a
 
     return LORAMAC_CRYPTO_SUCCESS;
 }
+#endif // MODULE_LORAWAN_MULTICAST_ON

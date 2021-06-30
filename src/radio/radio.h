@@ -114,11 +114,20 @@ typedef struct
 struct Radio_s
 {
     /*!
+     * \brief Initializes the io
+     */
+    void    ( *IoInit )( void );
+    /*!
+     * \brief Deinitializes the io
+     */
+    void    ( *IoDeInit )( void );
+    /*!
      * \brief Initializes the radio
      *
      * \param [IN] events Structure containing the driver callback functions
+     * \param [OUT] returns radioWakeUpTime
      */
-    void    ( *Init )( RadioEvents_t *events );
+    uint32_t    ( *Init )( RadioEvents_t *events );
     /*!
      * Return current radio status
      *

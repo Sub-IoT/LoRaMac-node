@@ -30,16 +30,25 @@ extern "C"
 
 #include <stdint.h>
 
-/*!
- * Generic definition
- */
-#ifndef SUCCESS
-#define SUCCESS                                     1
-#endif
+#include "hw_conf.h"
 
-#ifndef FAIL
-#define FAIL                                        0
-#endif
+/* prepocessor directive to align buffer*/
+#define ALIGN(n)             __attribute__((aligned(n)))
+
+typedef uint32_t TimerTime_t;
+
+/*!
+ * \brief  Find First Set
+ *         This function identifies the least significant index or position of the
+ *         bits set to one in the word
+ *
+ * \param [in]  value  Value to find least significant index
+ * \retval bitIndex    Index of least significat bit at one
+ */
+static inline uint8_t __ffs( uint32_t value )
+{
+    return( uint32_t )( 32 - __builtin_clz(value & ( -value ) ) );
+}
 
 /*!
  * \brief Returns the minimum value between a and b
@@ -141,35 +150,15 @@ void memset1( uint8_t *dst, uint8_t value, uint16_t size );
  */
 int8_t Nibble2HexChar( uint8_t a );
 
-/*!
- * Begins critical section
- */
-#define CRITICAL_SECTION_BEGIN( ) uint32_t mask; BoardCriticalSectionBegin( &mask )
-
-/*!
- * Ends critical section
- */
-#define CRITICAL_SECTION_END( ) BoardCriticalSectionEnd( &mask )
-
-/*
- * ============================================================================
- * Following functions must be implemented inside the specific platform 
- * board.c file.
- * ============================================================================
- */
-/*!
- * Disable interrupts, begins critical section
- * 
- * \param [IN] mask Pointer to a variable where to store the CPU IRQ mask
- */
-void BoardCriticalSectionBegin( uint32_t *mask );
-
-/*!
- * Ends critical section
- * 
- * \param [IN] mask Pointer to a variable where the CPU IRQ mask was stored
- */
-void BoardCriticalSectionEnd( uint32_t *mask );
+/* BACKUP_PRIMASK MUST be implemented at the begining of the funtion 
+   that implement a critical section                        
+   PRIMASK is saved on STACK and recovered at the end of the funtion
+   That way RESTORE_PRIMASK ensures that no irq would be triggered in case of
+   unbalanced enable/disable, reentrant code etc...*/
+#define BACKUP_PRIMASK()  uint32_t primask_bit= __get_PRIMASK()
+#define DISABLE_IRQ() __disable_irq()
+#define ENABLE_IRQ() __enable_irq()
+#define RESTORE_PRIMASK() __set_PRIMASK(primask_bit)
 
 #ifdef __cplusplus
 }
