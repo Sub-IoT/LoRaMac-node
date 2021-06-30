@@ -23,14 +23,13 @@
  * \endcode
  *
  */
-#include "board.h"
 #include "radio.h"
-
 #include "soft-se-hal.h"
+#include "hw.h"
 
 void SoftSeHalGetUniqueId( uint8_t *id )
 {
-    BoardGetUniqueId( id );
+    HW_GetUniqueId( id );
 }
 
 uint32_t SoftSeHalGetRandomNumber( void )

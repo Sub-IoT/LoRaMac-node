@@ -26,6 +26,8 @@ Maintainer: Miguel Luis ( Semtech ), Gregory Cristian ( Semtech ) and Daniel Jae
 #include "LoRaMacCrypto.h"
 #include "LoRaMacConfirmQueue.h"
 
+#include "MODULE_LORAWAN_defs.h"
+
 #ifdef LORAMAC_CLASSB_ENABLED
 
 

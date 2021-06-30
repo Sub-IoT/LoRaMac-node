@@ -40,13 +40,11 @@ DEALINGS WITH THE SOFTWARE
 extern "C" {
 #endif
 
-#include "aes.h" 
   
 #define AES_CMAC_KEY_LENGTH     16
 #define AES_CMAC_DIGEST_LENGTH  16
  
 typedef struct _AES_CMAC_CTX {
-            aes_context    rijndael;
             uint8_t        X[16];
             uint8_t        M_last[16];
             uint32_t       M_n;

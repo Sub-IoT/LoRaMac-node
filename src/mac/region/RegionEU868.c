@@ -36,6 +36,8 @@
 // Definitions
 #define CHANNELS_MASK_SIZE              1
 
+static int8_t joinRequestCounter = 0;
+
 /*!
  * Region specific context
  */
@@ -565,6 +567,8 @@ bool RegionEU868RxConfig( RxConfigParams_t* rxConfig, int8_t* datarate )
 
     Radio.SetMaxPayloadLength( modem, MaxPayloadOfDatarateEU868[dr] + LORAMAC_FRAME_PAYLOAD_OVERHEAD_SIZE );
 
+    DBG_PRINTF( "RX on freq %d Hz at DR %d\n\r", frequency, dr );
+    
     *datarate = (uint8_t) dr;
     return true;
 }
@@ -597,6 +601,8 @@ bool RegionEU868TxConfig( TxConfigParams_t* txConfig, int8_t* txPower, TimerTime
     // Update time-on-air
     *txTimeOnAir = GetTimeOnAir( txConfig->Datarate, txConfig->PktLen );
 
+    DBG_PRINTF( "TX on freq %d Hz at DR %d\n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate );
+    
     // Setup maximum payload lenght of the radio driver
     Radio.SetMaxPayloadLength( modem, txConfig->PktLen );
 
@@ -822,7 +828,36 @@ uint8_t RegionEU868DlChannelReq( DlChannelReqParams_t* dlChannelReq )
 
 int8_t RegionEU868AlternateDr( int8_t currentDr, AlternateDrType_t type )
 {
-    return currentDr;
+    //return currentDr; //reverting to older version.
+    int8_t datarate = 0;
+
+    if( ( joinRequestCounter % 48 ) == 0 )
+    {
+        datarate = DR_0;
+    }
+    else if( ( joinRequestCounter % 32 ) == 0 )
+    {
+        datarate = DR_1;
+    }
+    else if( ( joinRequestCounter % 24 ) == 0 )
+    {
+        datarate = DR_2;
+    }
+    else if( ( joinRequestCounter % 16 ) == 0 )
+    {
+        datarate = DR_3;
+    }
+    else if( ( joinRequestCounter % 8 ) == 0 )
+    {
+        datarate = DR_4;
+    }
+    else
+    {
+        datarate = DR_5;
+    }
+    joinRequestCounter++;
+
+    return datarate;
 }
 
 LoRaMacStatus_t RegionEU868NextChannel( NextChanParams_t* nextChanParams, uint8_t* channel, TimerTime_t* time, TimerTime_t* aggregatedTimeOff )

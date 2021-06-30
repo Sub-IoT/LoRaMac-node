@@ -60,12 +60,11 @@ void AES_CMAC_Init( AES_CMAC_CTX* ctx )
 {
     memset1( ctx->X, 0, sizeof ctx->X );
     ctx->M_n = 0;
-    memset1( ctx->rijndael.ksch, '\0', 240 );
 }
 
 void AES_CMAC_SetKey( AES_CMAC_CTX* ctx, const uint8_t key[AES_CMAC_KEY_LENGTH] )
 {
-    aes_set_key( key, AES_CMAC_KEY_LENGTH, &ctx->rijndael );
+    AES128_init(key);
 }
 
 void AES_CMAC_Update( AES_CMAC_CTX* ctx, const uint8_t* data, uint32_t len )
@@ -83,7 +82,7 @@ void AES_CMAC_Update( AES_CMAC_CTX* ctx, const uint8_t* data, uint32_t len )
         XOR( ctx->M_last, ctx->X );
 
         memcpy1( in, &ctx->X[0], 16 );  // Otherwise it does not look good
-        aes_encrypt( in, in, &ctx->rijndael );
+        AES128_ECB_encrypt(in, in);
         memcpy1( &ctx->X[0], in, 16 );
 
         data += mlen;
@@ -95,7 +94,7 @@ void AES_CMAC_Update( AES_CMAC_CTX* ctx, const uint8_t* data, uint32_t len )
         XOR( data, ctx->X );
 
         memcpy1( in, &ctx->X[0], 16 );  // Otherwise it does not look good
-        aes_encrypt( in, in, &ctx->rijndael );
+        AES128_ECB_encrypt(in, in);
         memcpy1( &ctx->X[0], in, 16 );
 
         data += 16;
@@ -113,7 +112,7 @@ void AES_CMAC_Final( uint8_t digest[AES_CMAC_DIGEST_LENGTH], AES_CMAC_CTX* ctx )
     /* generate subkey K1 */
     memset1( K, '\0', 16 );
 
-    aes_encrypt( K, K, &ctx->rijndael );
+    AES128_ECB_encrypt(K, K);
 
     if( K[0] & 0x80 )
     {
@@ -149,6 +148,6 @@ void AES_CMAC_Final( uint8_t digest[AES_CMAC_DIGEST_LENGTH], AES_CMAC_CTX* ctx )
     XOR( ctx->M_last, ctx->X );
 
     memcpy1( in, &ctx->X[0], 16 );  // Otherwise it does not look good
-    aes_encrypt( in, digest, &ctx->rijndael );
+    AES128_ECB_encrypt(in, digest);
     memset1( K, 0, sizeof K );
 }
