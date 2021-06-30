@@ -139,6 +139,7 @@ void memset1( uint8_t *dst, uint8_t value, uint16_t size );
  */
 int8_t Nibble2HexChar( uint8_t a );
 
+<<<<<<< HEAD
 /*!
  * \brief Computes a CCITT 32 bits CRC
  *
@@ -206,6 +207,17 @@ void BoardCriticalSectionBegin( uint32_t *mask );
  * \param [IN] mask Pointer to a variable where the CPU IRQ mask was stored
  */
 void BoardCriticalSectionEnd( uint32_t *mask );
+=======
+/* BACKUP_PRIMASK MUST be implemented at the begining of the funtion 
+   that implement a critical section                        
+   PRIMASK is saved on STACK and recovered at the end of the funtion
+   That way RESTORE_PRIMASK ensures that no irq would be triggered in case of
+   unbalanced enable/disable, reentrant code etc...*/
+#define BACKUP_PRIMASK()  uint32_t primask_bit= __get_PRIMASK()
+#define DISABLE_IRQ() __disable_irq()
+#define ENABLE_IRQ() __enable_irq()
+#define RESTORE_PRIMASK() __set_PRIMASK(primask_bit)
+>>>>>>> d0eeb80b (Modifying LoRaMac-node release 4.4.5 to integrate into oss-7.)
 
 #ifdef __cplusplus
 }

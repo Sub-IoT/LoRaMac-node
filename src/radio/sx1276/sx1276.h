@@ -30,9 +30,6 @@ extern "C"
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "gpio.h"
-#include "spi.h"
-#include "radio.h"
 #include "sx1276Regs-Fsk.h"
 #include "sx1276Regs-LoRa.h"
 
@@ -40,6 +37,7 @@ extern "C"
  * Radio wake-up time from sleep
  */
 #define RADIO_WAKEUP_TIME                           1 // [ms]
+#define RF_MID_BAND_THRESH                          525000000
 
 /*!
  * Sync word for Private LoRa networks
@@ -138,16 +136,11 @@ typedef struct
  */
 typedef struct SX1276_s
 {
-    Gpio_t        Reset;
-    Gpio_t        DIO0;
-    Gpio_t        DIO1;
-    Gpio_t        DIO2;
-    Gpio_t        DIO3;
-    Gpio_t        DIO4;
-    Gpio_t        DIO5;
-    Spi_t         Spi;
+    uint8_t       RxTx;
     RadioSettings_t Settings;
 }SX1276_t;
+
+extern SX1276_t SX1276;
 
 /*!
  * Hardware IO IRQ callback function definition
@@ -158,18 +151,61 @@ typedef void ( DioIrqHandler )( void* context );
  * SX1276 definitions
  */
 
+//declares board-specific callbacks, which are set in the board-specific file (e.g. mlm32l07x01.c)
+typedef struct sBoardCallback
+{
+    /*!
+     * \brief Set XO state on the board
+     */
+    void ( *SX1276BoardSetXO )( uint8_t state );
+    /*!
+     * \brief Get Board Wake Up time
+     */
+    uint32_t ( *SX1276BoardGetWakeTime )( void );
+    /*!
+     * \brief Initializes the radio I/Os Irq
+     */
+    void ( *SX1276BoardIoIrqInit )( DioIrqHandler **irqHandlers );
+    /*!
+     * \brief Sets the radio output power.
+     *
+     * \param [IN] power Sets the RF output power
+     */
+    void ( *SX1276BoardSetRfTxPower )( int8_t power );
+    /*!
+     * \brief Set the RF Switch I/Os pins in Low Power mode
+     *
+     * \param [IN] status enable or disable
+     */
+    void ( *SX1276BoardSetAntSwLowPower )( bool status );
+    /*!
+     * \brief Controls the antena switch if necessary.
+     *
+     * \remark see errata note
+     *
+     * \param [IN] opMode Current radio operating mode
+     */
+    void ( *SX1276BoardSetAntSw )( uint8_t opMode );
+}LoRaBoardCallback_t;
+
 /*!
  * ============================================================================
  * Public functions prototypes
  * ============================================================================
  */
 
+extern void hw_radio_io_init(bool disable_interrupts); 
+
+extern void hw_radio_io_deinit(void); 
+
+void SX1276BoardInit( LoRaBoardCallback_t *callbacks );
+
 /*!
  * \brief Initializes the radio
  *
  * \param [IN] events Structure containing the driver callback functions
  */
-void SX1276Init( RadioEvents_t *events );
+uint32_t SX1276Init( RadioEvents_t *events );
 
 /*!
  * Return current radio status
@@ -444,6 +480,20 @@ void SX1276SetPublicNetwork( bool enable );
  * \retval time Radio plus board wakeup time in ms.
  */
 uint32_t SX1276GetWakeupTime( void );
+
+/*!
+ * \brief Enables/disables the TCXO if available on board design.
+ *
+ * \param [IN] state TCXO enabled when true and disabled when false.
+ */
+void SX1276SetBoardTcxo( uint8_t state );
+
+/*!
+ * \brief Gets the Defines the time required for the TCXO to wakeup [ms].
+ *
+ * \retval time Board TCXO wakeup time in ms.
+ */
+uint32_t SX1276GetBoardTcxoWakeupTime( void );
 
 #ifdef __cplusplus
 }

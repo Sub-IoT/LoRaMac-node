@@ -43,6 +43,7 @@ extern "C"
 #endif
 
 #include "region/Region.h"
+#include "MODULE_LORAWAN_defs.h"
 
 /*!
  * LoRaMac maximum number of channels
@@ -52,7 +53,7 @@ extern "C"
 /*!
  * Minimal datarate that can be used by the node
  */
-#define US915_TX_MIN_DATARATE                       DR_0
+#define US915_TX_MIN_DATARATE                       MODULE_LORAWAN_US_MINIMUM_DATARATE
 
 /*!
  * Maximal datarate that can be used by the node
@@ -72,7 +73,7 @@ extern "C"
 /*!
  * Default datarate used by the node
  */
-#define US915_DEFAULT_DATARATE                      DR_0
+#define US915_DEFAULT_DATARATE                      MODULE_LORAWAN_US_MINIMUM_DATARATE
 
 /*!
  * Minimal Rx1 receive datarate offset

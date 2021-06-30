@@ -20,10 +20,10 @@
  *
  * \author    Gregory Cristian ( Semtech )
  */
-#include "utilities.h"
-#include "board.h"
-#include "rtc-board.h"
-#include "timer.h"
+#include <time.h>
+#include "hw.h"
+#include "timeServer.h"
+#include "scheduler.h"
 
 /*!
  * Safely execute call back
@@ -92,6 +92,7 @@ void TimerInit( TimerEvent_t *obj, void ( *callback )( void *context ) )
     obj->Callback = callback;
     obj->Context = NULL;
     obj->Next = NULL;
+    sched_register_task((task_t)obj->Callback);
 }
 
 void TimerSetContext( TimerEvent_t *obj, void* context )
@@ -103,11 +104,12 @@ void TimerStart( TimerEvent_t *obj )
 {
     uint32_t elapsedTime = 0;
 
-    CRITICAL_SECTION_BEGIN( );
+    BACKUP_PRIMASK();
+    DISABLE_IRQ( );
 
     if( ( obj == NULL ) || ( TimerExists( obj ) == true ) )
     {
-        CRITICAL_SECTION_END( );
+        RESTORE_PRIMASK( );
         return;
     }
 
@@ -117,13 +119,13 @@ void TimerStart( TimerEvent_t *obj )
 
     if( TimerListHead == NULL )
     {
-        RtcSetTimerContext( );
+        HW_RTC_SetTimerContext( );
         // Inserts a timer at time now + obj->Timestamp
         TimerInsertNewHeadTimer( obj );
     }
     else
     {
-        elapsedTime = RtcGetTimerElapsedTime( );
+        elapsedTime = HW_RTC_GetTimerElapsedTime( );
         obj->Timestamp += elapsedTime;
 
         if( obj->Timestamp < TimerListHead->Timestamp )
@@ -135,7 +137,7 @@ void TimerStart( TimerEvent_t *obj )
             TimerInsertTimer( obj );
         }
     }
-    CRITICAL_SECTION_END( );
+    RESTORE_PRIMASK( );
 }
 
 static void TimerInsertTimer( TimerEvent_t *obj )
@@ -185,8 +187,8 @@ void TimerIrqHandler( void )
     TimerEvent_t* cur;
     TimerEvent_t* next;
 
-    uint32_t old =  RtcGetTimerContext( );
-    uint32_t now =  RtcSetTimerContext( );
+    uint32_t old =  HW_RTC_GetTimerContext( );
+    uint32_t now =  HW_RTC_SetTimerContext( );
     uint32_t deltaContext = now - old; // intentional wrap around
 
     // Update timeStamp based upon new Time Reference
@@ -213,16 +215,16 @@ void TimerIrqHandler( void )
         cur = TimerListHead;
         TimerListHead = TimerListHead->Next;
         cur->IsStarted = false;
-        ExecuteCallBack( cur->Callback, cur->Context );
+        sched_post_task((task_t)cur->Callback);
     }
 
     // Remove all the expired object from the list
-    while( ( TimerListHead != NULL ) && ( TimerListHead->Timestamp < RtcGetTimerElapsedTime( ) ) )
+    while( ( TimerListHead != NULL ) && ( TimerListHead->Timestamp < HW_RTC_GetTimerElapsedTime( ) ) )
     {
         cur = TimerListHead;
         TimerListHead = TimerListHead->Next;
         cur->IsStarted = false;
-        ExecuteCallBack( cur->Callback, cur->Context );
+        sched_post_task((task_t)cur->Callback);
     }
 
     // Start the next TimerListHead if it exists AND NOT running
@@ -234,7 +236,8 @@ void TimerIrqHandler( void )
 
 void TimerStop( TimerEvent_t *obj )
 {
-    CRITICAL_SECTION_BEGIN( );
+    BACKUP_PRIMASK();
+    DISABLE_IRQ( );
 
     TimerEvent_t* prev = TimerListHead;
     TimerEvent_t* cur = TimerListHead;
@@ -242,7 +245,7 @@ void TimerStop( TimerEvent_t *obj )
     // List is empty or the obj to stop does not exist
     if( ( TimerListHead == NULL ) || ( obj == NULL ) )
     {
-        CRITICAL_SECTION_END( );
+        RESTORE_PRIMASK( );
         return;
     }
 
@@ -260,7 +263,7 @@ void TimerStop( TimerEvent_t *obj )
             }
             else
             {
-                RtcStopAlarm( );
+                HW_RTC_StopAlarm( );
                 TimerListHead = NULL;
             }
         }
@@ -301,7 +304,7 @@ void TimerStop( TimerEvent_t *obj )
             }
         }
     }
-    CRITICAL_SECTION_END( );
+    RESTORE_PRIMASK( );
 }
 
 static bool TimerExists( TimerEvent_t *obj )
@@ -328,11 +331,11 @@ void TimerReset( TimerEvent_t *obj )
 void TimerSetValue( TimerEvent_t *obj, uint32_t value )
 {
     uint32_t minValue = 0;
-    uint32_t ticks = RtcMs2Tick( value );
+    uint32_t ticks = HW_RTC_ms2Tick( value );
 
     TimerStop( obj );
 
-    minValue = RtcGetMinimumTimeout( );
+    minValue = HW_RTC_GetMinimumTimeout( );
 
     if( ticks < minValue )
     {
@@ -345,8 +348,8 @@ void TimerSetValue( TimerEvent_t *obj, uint32_t value )
 
 TimerTime_t TimerGetCurrentTime( void )
 {
-    uint32_t now = RtcGetTimerValue( );
-    return  RtcTick2Ms( now );
+    uint32_t now = HW_RTC_GetTimerValue( );
+    return  HW_RTC_Tick2ms( now );
 }
 
 TimerTime_t TimerGetElapsedTime( TimerTime_t past )
@@ -355,32 +358,32 @@ TimerTime_t TimerGetElapsedTime( TimerTime_t past )
     {
         return 0;
     }
-    uint32_t nowInTicks = RtcGetTimerValue( );
-    uint32_t pastInTicks = RtcMs2Tick( past );
+    uint32_t nowInTicks = HW_RTC_GetTimerValue( );
+    uint32_t pastInTicks = HW_RTC_ms2Tick( past );
 
     // Intentional wrap around. Works Ok if tick duration below 1ms
-    return RtcTick2Ms( nowInTicks - pastInTicks );
+    return HW_RTC_Tick2ms( nowInTicks - pastInTicks );
 }
 
 static void TimerSetTimeout( TimerEvent_t *obj )
 {
-    int32_t minTicks= RtcGetMinimumTimeout( );
+    int32_t minTicks= HW_RTC_GetMinimumTimeout( );
     obj->IsNext2Expire = true;
 
     // In case deadline too soon
-    if( obj->Timestamp  < ( RtcGetTimerElapsedTime( ) + minTicks ) )
+    if( obj->Timestamp  < ( HW_RTC_GetTimerElapsedTime( ) + minTicks ) )
     {
-        obj->Timestamp = RtcGetTimerElapsedTime( ) + minTicks;
+        obj->Timestamp = HW_RTC_GetTimerElapsedTime( ) + minTicks;
     }
-    RtcSetAlarm( obj->Timestamp );
+    HW_RTC_SetAlarm( obj->Timestamp );
 }
 
 TimerTime_t TimerTempCompensation( TimerTime_t period, float temperature )
 {
-    return RtcTempCompensation( period, temperature );
+    return HW_RtcTempCompensation( period, temperature );
 }
 
 void TimerProcess( void )
 {
-    RtcProcess( );
+    HW_RtcProcess( );
 }

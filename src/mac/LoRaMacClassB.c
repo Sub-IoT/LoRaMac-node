@@ -29,6 +29,8 @@ Maintainer: Miguel Luis ( Semtech ), Gregory Cristian ( Semtech ) and Daniel Jae
 #include "radio.h"
 #include "region/Region.h"
 
+#include "MODULE_LORAWAN_defs.h"
+
 #ifdef LORAMAC_CLASSB_ENABLED
 
 

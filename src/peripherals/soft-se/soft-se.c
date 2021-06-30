@@ -244,21 +244,18 @@ SecureElementStatus_t SecureElementAesEncrypt( uint8_t* buffer, uint16_t size, K
         return SECURE_ELEMENT_ERROR_BUF_SIZE;
     }
 
-    aes_context aesContext;
-    memset1( aesContext.ksch, '\0', 240 );
-
     Key_t*                pItem;
     SecureElementStatus_t retval = GetKeyByID( keyID, &pItem );
 
     if( retval == SECURE_ELEMENT_SUCCESS )
     {
-        aes_set_key( pItem->KeyValue, 16, &aesContext );
+        AES128_init(pItem->KeyValue);
 
         uint8_t block = 0;
 
         while( size != 0 )
         {
-            aes_encrypt( &buffer[block], &encBuffer[block], &aesContext );
+            AES128_ECB_encrypt(&buffer[block], &encBuffer[block]);
             block = block + 16;
             size  = size - 16;
         }

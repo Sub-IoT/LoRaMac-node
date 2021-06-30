@@ -71,10 +71,12 @@ extern "C"
 {
 #endif
 
+#include "MODULE_LORAWAN_defs.h" //includes definition of MODULE_LORAWAN_MULTICAST_ON
+
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "timer.h"
+#include "timeServer.h"
 #include "systime.h"
 #include "LoRaMacTypes.h"
 
@@ -2568,6 +2570,19 @@ typedef struct sLoRaMacPrimitives
      * \param   [OUT] MLME-Indication parameters
      */
     void ( *MacMlmeIndication )( MlmeIndication_t* MlmeIndication );
+    /*!
+     * \brief   Return current delay.
+     *
+     * \param   the duty cycle wait time
+     * \param   the number of times this transmission has been attempted
+     */
+    void ( *MacDutyDelay )( uint32_t delay, uint8_t attempt );
+    /*!
+     * \brief   Return when frame retransmission occurs
+     *
+     * \param   [OUT] MLME-Confirm parameters
+     */
+    void ( *MacRetryTransmission )( uint8_t attempt );
 }LoRaMacPrimitives_t;
 
 /*!
@@ -2604,6 +2619,19 @@ typedef struct sLoRaMacCallback
      *\warning  Runs in a IRQ context. Should only change variables state.
      */
     void ( *MacProcessNotify )( void );
+    //in oss-7, the LoRaMac-node secure element is not used, the DevEui and AppEui are stored further up the stack instead.
+    /*!
+     * \brief   Gets the DevEui from the upper layer of the stack
+     * 
+     * \retval the device's DevEui
+     */
+    uint8_t* ( *GetDevEui )( void );
+    /*!
+     * \brief   Gets the AppEui from the upper layer of the stack
+     * 
+     * \retval the device's AppEui
+     */
+    uint8_t* ( *GetAppEui )( void );
 }LoRaMacCallback_t;
 
 
@@ -2666,7 +2694,7 @@ bool LoRaMacIsBusy( void );
  *
  * \remark This function must be called in the main loop.
  */
-void LoRaMacProcess( void );
+void LoRaMacProcess( void* arg );
 
 /*!
  * \brief   Queries the LoRaMAC if it is possible to send the next frame with
@@ -2727,6 +2755,7 @@ LoRaMacStatus_t LoRaMacChannelAdd( uint8_t id, ChannelParams_t params );
  */
 LoRaMacStatus_t LoRaMacChannelRemove( uint8_t id );
 
+#ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space.
 /*!
  * \brief   LoRaMAC multicast channel setup service
  *
@@ -2782,6 +2811,7 @@ uint8_t LoRaMacMcChannelGetGroupId( uint32_t mcAddress );
  *          \ref LORAMAC_STATUS_MC_GROUP_UNDEFINED.
  */
 LoRaMacStatus_t LoRaMacMcChannelSetupRxParams( AddressIdentifier_t groupID, McRxParams_t *rxParams, uint8_t *status );
+#endif // MODULE_LORAWAN_MULTICAST_ON
 
 /*!
  * \brief   LoRaMAC MIB-Get
@@ -2920,6 +2950,13 @@ LoRaMacStatus_t LoRaMacMcpsRequest( McpsReq_t* mcpsRequest );
  *          \ref LORAMAC_STATUS_BUSY
  */
 LoRaMacStatus_t LoRaMacDeInitialization( void );
+
+/**
+ * @brief Gets the current delay caused by the duty cycle restriction
+ * This will update automatically with each function call
+ * @return delay in seconds
+ */
+uint16_t lorawanGetDutyCycleWaitTime();
 
 /*!
  * \brief   Resets the internal state machine.

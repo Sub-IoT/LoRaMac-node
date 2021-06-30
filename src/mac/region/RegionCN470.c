@@ -759,6 +759,8 @@ bool RegionCN470RxConfig( RxConfigParams_t* rxConfig, int8_t* datarate )
 
     Radio.SetMaxPayloadLength( MODEM_LORA, MaxPayloadOfDatarateCN470[dr] + LORAMAC_FRAME_PAYLOAD_OVERHEAD_SIZE );
 
+    DBG_PRINTF( "RX on freq %d Hz at DR %d\n\r", frequency, dr );
+
     *datarate = (uint8_t) dr;
     return true;
 }

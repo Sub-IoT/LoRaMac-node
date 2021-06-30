@@ -26,8 +26,9 @@
 #include "board.h"
 
 #include "soft-se-hal.h"
+#include "hw.h"
 
 void SoftSeHalGetUniqueId( uint8_t *id )
 {
-    BoardGetUniqueId( id );
+    HW_GetUniqueId( id );
 }

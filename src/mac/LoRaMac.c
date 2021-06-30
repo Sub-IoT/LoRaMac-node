@@ -74,14 +74,13 @@
 #define BACKOFF_DC_24_HOURS                         10000
 
 /*!
- * Maximum value for the ADR ack counter
+ * Current duty cycle backoff time
  */
-#define ADR_ACK_COUNTER_MAX                         0xFFFFFFFF
-
+static uint32_t dutyCycleWaitTime = 0;
 /*!
- * Delay required to simulate an ABP join like an OTAA join
+ * Time when we started waiting for the backoff time
  */
-#define ABP_JOIN_PENDING_DELAY_MS                   10
+static TimerTime_t dutyCycleWaitStartTime;
 
 /*!
  * LoRaMac internal states
@@ -749,6 +748,7 @@ static void OnRadioTxDone( void )
     LoRaMacRadioEvents.Events.TxDone = 1;
 
     OnMacProcessNotify( );
+    sched_post_task(&LoRaMacProcess);
 }
 
 static void OnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
@@ -763,6 +763,7 @@ static void OnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t
     LoRaMacRadioEvents.Events.RxProcessPending = 1;
 
     OnMacProcessNotify( );
+    sched_post_task(&LoRaMacProcess);
 }
 
 static void OnRadioTxTimeout( void )
@@ -770,6 +771,7 @@ static void OnRadioTxTimeout( void )
     LoRaMacRadioEvents.Events.TxTimeout = 1;
 
     OnMacProcessNotify( );
+    sched_post_task(&LoRaMacProcess);
 }
 
 static void OnRadioRxError( void )
@@ -777,6 +779,7 @@ static void OnRadioRxError( void )
     LoRaMacRadioEvents.Events.RxError = 1;
 
     OnMacProcessNotify( );
+    sched_post_task(&LoRaMacProcess);
 }
 
 static void OnRadioRxTimeout( void )
@@ -784,6 +787,7 @@ static void OnRadioRxTimeout( void )
     LoRaMacRadioEvents.Events.RxTimeout = 1;
 
     OnMacProcessNotify( );
+    sched_post_task(&LoRaMacProcess);
 }
 
 static void UpdateRxSlotIdleState( void )
@@ -977,7 +981,7 @@ static void ProcessRadioRxDone( void )
                 PrepareRxDoneAbort( );
                 return;
             }
-            macCryptoStatus = LoRaMacCryptoHandleJoinAccept( JOIN_REQ, SecureElementGetJoinEui( ), &macMsgJoinAccept );
+            macCryptoStatus = LoRaMacCryptoHandleJoinAccept( JOIN_REQ, MacCtx.MacCallbacks->GetAppEui( ), &macMsgJoinAccept ); // in oss-7, no secure element inside the lorawan stack is used.
 
             if( LORAMAC_CRYPTO_SUCCESS != macCryptoStatus )
             {
@@ -1514,10 +1518,11 @@ static void LoRaMacHandleIrqEvents( void )
 {
     LoRaMacRadioEvents_t events;
 
-    CRITICAL_SECTION_BEGIN( );
+    BACKUP_PRIMASK();
+    DISABLE_IRQ();
     events = LoRaMacRadioEvents;
     LoRaMacRadioEvents.Value = 0;
-    CRITICAL_SECTION_END( );
+    RESTORE_PRIMASK();
 
     if( events.Value != 0 )
     {
@@ -1704,6 +1709,8 @@ static void LoRaMacHandleMcpsRequest( void )
             MacCtx.MacFlags.Bits.MacDone = 0;
             // Reset the state of the AckTimeout
             MacCtx.RetransmitTimeoutRetry = false;
+            // Fire callback
+	        MacCtx.MacPrimitives->MacRetryTransmission(MacCtx.AckTimeoutRetriesCounter);
             // Sends the same frame again
             OnTxDelayedTimerEvent( NULL );
         }
@@ -1854,7 +1861,7 @@ static bool LoRaMacHandleResponseTimeout( TimerTime_t timeoutInMs, TimerTime_t s
     return false;
 }
 
-void LoRaMacProcess( void )
+void LoRaMacProcess( void* arg )
 {
     uint8_t noTx = false;
 
@@ -1968,6 +1975,7 @@ static void OnRetransmitTimeoutTimerEvent( void* context )
         MacCtx.RetransmitTimeoutRetry = true;
     }
     OnMacProcessNotify( );
+    sched_post_task(&LoRaMacProcess);
 }
 
 static LoRaMacCryptoStatus_t GetFCntDown( AddressIdentifier_t addrID, FType_t fType, LoRaMacMessageData_t* macMsg, Version_t lrWanVersion,
@@ -2719,8 +2727,7 @@ LoRaMacStatus_t Send( LoRaMacHeader_t* macHdr, uint8_t fPort, void* fBuffer, uin
     // Validate status
     if( ( status == LORAMAC_STATUS_OK ) || ( status == LORAMAC_STATUS_SKIPPED_APP_DATA ) )
     {
-        // Schedule frame, do not allow delayed transmissions
-        status = ScheduleTx( false );
+        status = ScheduleTx( true ); //always allow delayed transmissions for regular (non-join) frames
     }
 
     // Post processing
@@ -2823,8 +2830,8 @@ LoRaMacStatus_t SendReJoinReq( JoinReqIdentifier_t joinReqType )
             macHdr.Bits.MType = FRAME_TYPE_JOIN_REQ;
             MacCtx.TxMsg.Message.JoinReq.MHDR.Value = macHdr.Value;
 
-            memcpy1( MacCtx.TxMsg.Message.JoinReq.JoinEUI, SecureElementGetJoinEui( ), LORAMAC_JOIN_EUI_FIELD_SIZE );
-            memcpy1( MacCtx.TxMsg.Message.JoinReq.DevEUI, SecureElementGetDevEui( ), LORAMAC_DEV_EUI_FIELD_SIZE );
+            memcpy1( MacCtx.TxMsg.Message.JoinReq.JoinEUI, MacCtx.MacCallbacks->GetAppEui( ), LORAMAC_JOIN_EUI_FIELD_SIZE ); // in oss-7, no secure element inside the lorawan stack is used.
+            memcpy1( MacCtx.TxMsg.Message.JoinReq.DevEUI, MacCtx.MacCallbacks->GetDevEui( ), LORAMAC_DEV_EUI_FIELD_SIZE );
 
             allowDelayedTx = false;
 
@@ -3009,6 +3016,12 @@ static LoRaMacStatus_t ScheduleTx( bool allowDelayedTx )
                     MacCtx.MacState |= LORAMAC_TX_DELAYED;
                     TimerSetValue( &MacCtx.TxDelayedTimer, MacCtx.DutyCycleWaitTime );
                     TimerStart( &MacCtx.TxDelayedTimer );
+
+                    dutyCycleWaitStartTime = TimerGetCurrentTime( );
+                    dutyCycleWaitTime = MacCtx.DutyCycleWaitTime;
+                    if(MacCtx.DutyCycleWaitTime>10)
+                        MacCtx.MacPrimitives->MacDutyDelay( MacCtx.DutyCycleWaitTime, MacCtx.ChannelsNbTransCounter); // callback to indicate to upper layer that a message has been delayed
+                    
                     return LORAMAC_STATUS_OK;
                 }
                 // Need to delay, but allowDelayedTx does not allow it
@@ -3750,7 +3763,10 @@ LoRaMacStatus_t LoRaMacInitialization( LoRaMacPrimitives_t* primitives, LoRaMacC
     if( ( primitives->MacMcpsConfirm == NULL ) ||
         ( primitives->MacMcpsIndication == NULL ) ||
         ( primitives->MacMlmeConfirm == NULL ) ||
-        ( primitives->MacMlmeIndication == NULL ) )
+        ( primitives->MacMlmeIndication == NULL ) || 
+        ( primitives->MacDutyDelay == NULL ) ||
+	( primitives->MacRetryTransmission == NULL))
+        
     {
         return LORAMAC_STATUS_PARAMETER_INVALID;
     }
@@ -4049,17 +4065,17 @@ LoRaMacStatus_t LoRaMacMibGetRequestConfirm( MibRequestConfirm_t* mibGet )
         }
         case MIB_DEV_EUI:
         {
-            mibGet->Param.DevEui = SecureElementGetDevEui( );
+            mibGet->Param.DevEui = MacCtx.MacCallbacks->GetDevEui( ); //get from where it is saved on upper layer, instead of in secure element
             break;
         }
         case MIB_JOIN_EUI:
         {
-            mibGet->Param.JoinEui = SecureElementGetJoinEui( );
+            mibGet->Param.JoinEui = MacCtx.MacCallbacks->GetAppEui( ); //get from where it is saved on upper layer, instead of in secure element
             break;
         }
         case MIB_SE_PIN:
         {
-            mibGet->Param.SePin = SecureElementGetPin( );
+            mibGet->Param.SePin = 0; // secure element not used
             break;
         }
         case MIB_ADR:
@@ -4328,26 +4344,12 @@ LoRaMacStatus_t LoRaMacMibSetRequestConfirm( MibRequestConfirm_t* mibSet )
         }
         case MIB_DEV_EUI:
         {
-            if( SecureElementSetDevEui( mibSet->Param.DevEui ) != SECURE_ELEMENT_SUCCESS )
-            {
-                status = LORAMAC_STATUS_PARAMETER_INVALID;
-            }
+            status = LORAMAC_STATUS_PARAMETER_INVALID; // in oss-7, no secure element inside the lorawan stack is used, so should be set in upper layer
             break;
         }
         case MIB_JOIN_EUI:
         {
-            if( SecureElementSetJoinEui( mibSet->Param.JoinEui ) != SECURE_ELEMENT_SUCCESS )
-            {
-                status = LORAMAC_STATUS_PARAMETER_INVALID;
-            }
-            break;
-        }
-        case MIB_SE_PIN:
-        {
-            if( SecureElementSetPin( mibSet->Param.SePin ) != SECURE_ELEMENT_SUCCESS )
-            {
-                status = LORAMAC_STATUS_PARAMETER_INVALID;
-            }
+            status = LORAMAC_STATUS_PARAMETER_INVALID; // in oss-7, no secure element inside the lorawan stack is used, so should be set in upper layer
             break;
         }
         case MIB_ADR:
@@ -5699,6 +5701,13 @@ LoRaMacStatus_t LoRaMacDeInitialization( void )
         // Switch off Radio
         Radio.Sleep( );
 
+        // cancel all tasks
+        sched_cancel_task((task_t)&MacCtx.TxDelayedTimer.Callback);
+        sched_cancel_task((task_t)&MacCtx.RxWindowTimer1.Callback);
+        sched_cancel_task((task_t)&MacCtx.RxWindowTimer2.Callback);
+        sched_cancel_task((task_t)&MacCtx.AckTimeoutTimer.Callback);
+        sched_cancel_task(&LoRaMacProcess);
+
         // Return success
         return LORAMAC_STATUS_OK;
     }
@@ -5724,4 +5733,10 @@ void LoRaMacReset( void )
 
     // Inform application layer
     OnMacProcessNotify( );
+}
+
+uint16_t lorawanGetDutyCycleWaitTime()
+{
+    uint32_t elapsedTime = TimerGetElapsedTime(dutyCycleWaitStartTime);
+    return (dutyCycleWaitTime != 0 && dutyCycleWaitTime > elapsedTime) ? (dutyCycleWaitTime - elapsedTime)/1000 : 0;
 }

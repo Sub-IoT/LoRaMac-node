@@ -349,7 +349,7 @@ void RegionUS915InitDefaults( InitDefaultsParams_t* params )
             {
                 // 125 kHz channels
                 RegionNvmGroup2->Channels[i].Frequency = 902300000 + i * 200000;
-                RegionNvmGroup2->Channels[i].DrRange.Value = ( DR_3 << 4 ) | DR_0;
+                RegionNvmGroup2->Channels[i].DrRange.Value = ( DR_3 << 4 ) | MODULE_LORAWAN_MINIMUM_DATARATE;
                 RegionNvmGroup2->Channels[i].Band = 0;
             }
             for( uint8_t i = US915_MAX_NB_CHANNELS - 8; i < US915_MAX_NB_CHANNELS; i++ )
@@ -537,6 +537,8 @@ bool RegionUS915RxConfig( RxConfigParams_t* rxConfig, int8_t* datarate )
 
     Radio.SetMaxPayloadLength( MODEM_LORA, MaxPayloadOfDatarateUS915[dr] + LORAMAC_FRAME_PAYLOAD_OVERHEAD_SIZE );
 
+    DBG_PRINTF( "RX on freq %d Hz at DR %d\n\r", frequency, dr );
+
     *datarate = (uint8_t) dr;
     return true;
 }
@@ -556,6 +558,8 @@ bool RegionUS915TxConfig( TxConfigParams_t* txConfig, int8_t* txPower, TimerTime
 
     Radio.SetTxConfig( MODEM_LORA, phyTxPower, 0, bandwidth, phyDr, 1, 8, false, true, 0, 0, false, 4000 );
 
+    DBG_PRINTF( "TX on freq %d Hz at DR %d\n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate );
+    
     // Setup maximum payload lenght of the radio driver
     Radio.SetMaxPayloadLength( MODEM_LORA, txConfig->PktLen );
 
@@ -795,7 +799,7 @@ int8_t RegionUS915AlternateDr( int8_t currentDr, AlternateDrType_t type )
     }
     else
     {
-        currentDr = DR_0;
+        currentDr = MODULE_LORAWAN_US_MINIMUM_DATARATE;
     }
     return currentDr;
 }
@@ -863,7 +867,7 @@ LoRaMacStatus_t RegionUS915NextChannel( NextChanParams_t* nextChanParams, uint8_
             // Each time a 125 kHz channel will be selected from another group.
 
             // 125kHz Channels (0 - 63) DR0
-            if( nextChanParams->Datarate == DR_0 )
+            if( nextChanParams->Datarate == MODULE_LORAWAN_US_MINIMUM_DATARATE )
             {
                 if( RegionBaseUSComputeNext125kHzJoinChannel( ( uint16_t* ) RegionNvmGroup1->ChannelsMaskRemaining,
                     &RegionNvmGroup1->JoinChannelGroupsCurrentIndex, channel ) == LORAMAC_STATUS_PARAMETER_INVALID )
@@ -906,7 +910,7 @@ uint8_t RegionUS915ApplyDrOffset( uint8_t downlinkDwellTime, int8_t dr, int8_t d
 
     if( datarate < 0 )
     {
-        datarate = DR_0;
+        datarate = MODULE_LORAWAN_US_MINIMUM_DATARATE;
     }
     return datarate;
 }

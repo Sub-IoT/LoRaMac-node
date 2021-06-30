@@ -45,6 +45,7 @@ extern "C"
 #include "LoRaMacTypes.h"
 #include "LoRaMacHeaderTypes.h"
 #include "region/Region.h"
+#include "lorawan_debug.h"
 
 // Constants that are common to all the regions.
 

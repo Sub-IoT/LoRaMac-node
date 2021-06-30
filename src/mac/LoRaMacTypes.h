@@ -42,7 +42,7 @@ extern "C"
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "timer.h"
+#include "timeServer.h"
 #include "systime.h"
 
 /*!

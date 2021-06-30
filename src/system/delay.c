@@ -20,8 +20,9 @@
  *
  * \author    Gregory Cristian ( Semtech )
  */
-#include "delay-board.h"
 #include "delay.h"
+#include "hw.h"
+#include "timeServer.h" //TODO: needed?
 
 void Delay( float s )
 {
@@ -30,5 +31,6 @@ void Delay( float s )
 
 void DelayMs( uint32_t ms )
 {
-    DelayMsMcu( ms );
+  HW_RTC_DelayMs( ms );
+
 }

@@ -526,6 +526,8 @@ bool RegionKR920RxConfig( RxConfigParams_t* rxConfig, int8_t* datarate )
     Radio.SetRxConfig( MODEM_LORA, rxConfig->Bandwidth, phyDr, 1, 0, 8, rxConfig->WindowTimeout, false, 0, false, 0, 0, true, rxConfig->RxContinuous );
     Radio.SetMaxPayloadLength( MODEM_LORA, MaxPayloadOfDatarateKR920[dr] + LORAMAC_FRAME_PAYLOAD_OVERHEAD_SIZE );
 
+    DBG_PRINTF( "RX on freq %d Hz at DR %d\n\r", frequency, dr );
+
     *datarate = (uint8_t) dr;
     return true;
 }
@@ -550,6 +552,8 @@ bool RegionKR920TxConfig( TxConfigParams_t* txConfig, int8_t* txPower, TimerTime
 
     Radio.SetTxConfig( MODEM_LORA, phyTxPower, 0, bandwidth, phyDr, 1, 8, false, true, 0, 0, false, 4000 );
 
+    DBG_PRINTF( "TX on freq %d Hz at DR %d\n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate );
+    
     // Setup maximum payload lenght of the radio driver
     Radio.SetMaxPayloadLength( MODEM_LORA, txConfig->PktLen );
     // Update time-on-air

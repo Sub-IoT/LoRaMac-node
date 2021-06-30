@@ -30,6 +30,8 @@
 extern "C" {
 #endif
 
+#include "MODULE_LORAWAN_defs.h" //includes definition of MODULE_LORAWAN_MULTICAST_ON 
+
 /*!
  ******************************************************************************
  ********************************** WARNING ***********************************
@@ -95,6 +97,7 @@ extern "C" {
  */
 #define LORAWAN_DEVICE_ADDRESS                             ( uint32_t )0x00000000
 
+#ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space. When turned off, space for multicast keys (in soft-se) is not allocated.
 #define SOFT_SE_KEY_LIST                                                                                            \
     {                                                                                                               \
         {                                                                                                           \
@@ -289,6 +292,90 @@ extern "C" {
                           0x00 },                                                                                   \
         },                                                                                                          \
     },
+#else 
+#define SOFT_SE_KEY_LIST                                                                                            \
+    {                                                                                                               \
+        {                                                                                                           \
+            /*!                                                                                                     \
+             * Application root key                                                                                 \
+             * WARNING: FOR 1.0.x DEVICES IT IS THE \ref LORAWAN_GEN_APP_KEY                                        \
+             */                                                                                                     \
+            .KeyID    = APP_KEY,                                                                                    \
+            .KeyValue = { 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, \
+                          0x3C },                                                                                   \
+        },                                                                                                          \
+        {                                                                                                           \
+            /*!                                                                                                     \
+             * Network root key                                                                                     \
+             * WARNING: FOR 1.0.x DEVICES IT IS THE \ref LORAWAN_APP_KEY                                            \
+             */                                                                                                     \
+            .KeyID    = NWK_KEY,                                                                                    \
+            .KeyValue = { 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, \
+                          0x3C },                                                                                   \
+        },                                                                                                          \
+        {                                                                                                           \
+            /*!                                                                                                     \
+             * Join session integrity key (Dynamically updated)                                                     \
+             * WARNING: NOT USED FOR 1.0.x DEVICES                                                                  \
+             */                                                                                                     \
+            .KeyID    = J_S_INT_KEY,                                                                                \
+            .KeyValue = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
+                          0x00 },                                                                                   \
+        },                                                                                                          \
+        {                                                                                                           \
+            /*!                                                                                                     \
+             * Join session encryption key (Dynamically updated)                                                    \
+             * WARNING: NOT USED FOR 1.0.x DEVICES                                                                  \
+             */                                                                                                     \
+            .KeyID    = J_S_ENC_KEY,                                                                                \
+            .KeyValue = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
+                          0x00 },                                                                                   \
+        },                                                                                                          \
+        {                                                                                                           \
+            /*!                                                                                                     \
+             * Forwarding Network session integrity key                                                             \
+             * WARNING: NWK_S_KEY FOR 1.0.x DEVICES                                                                 \
+             */                                                                                                     \
+            .KeyID    = F_NWK_S_INT_KEY,                                                                            \
+            .KeyValue = { 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, \
+                          0x3C },                                                                                   \
+        },                                                                                                          \
+        {                                                                                                           \
+            /*!                                                                                                     \
+             * Serving Network session integrity key                                                                \
+             * WARNING: NOT USED FOR 1.0.x DEVICES. MUST BE THE SAME AS \ref LORAWAN_F_NWK_S_INT_KEY                \
+             */                                                                                                     \
+            .KeyID    = S_NWK_S_INT_KEY,                                                                            \
+            .KeyValue = { 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, \
+                          0x3C },                                                                                   \
+        },                                                                                                          \
+        {                                                                                                           \
+            /*!                                                                                                     \
+             * Network session encryption key                                                                       \
+             * WARNING: NOT USED FOR 1.0.x DEVICES. MUST BE THE SAME AS \ref LORAWAN_F_NWK_S_INT_KEY                \
+             */                                                                                                     \
+            .KeyID    = NWK_S_ENC_KEY,                                                                              \
+            .KeyValue = { 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, \
+                          0x3C },                                                                                   \
+        },                                                                                                          \
+        {                                                                                                           \
+            /*!                                                                                                     \
+             * Application session key                                                                              \
+             */                                                                                                     \
+            .KeyID    = APP_S_KEY,                                                                                  \
+            .KeyValue = { 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, \
+                          0x3C },                                                                                   \
+        },                                                                                                          \
+        {                                                                                                           \
+            /*!                                                                                                     \
+             * All zeros key. (ClassB usage)(constant)                                                              \
+             */                                                                                                     \
+            .KeyID    = SLOT_RAND_ZERO_KEY,                                                                         \
+            .KeyValue = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
+                          0x00 },                                                                                   \
+        },                                                                                                          \
+    },
+#endif // MODULE_LORAWAN_MULTICAST_ON
 
 #ifdef __cplusplus
 }
