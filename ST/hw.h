@@ -71,8 +71,6 @@ Maintainer: Miguel Luis and Gregory Cristian
 #include <stdint.h>
 // TODO
 #include "hw_conf.h"
-#include "hw_gpio.h"
-#include "hw_spi.h"
 #include "hw_rtc.h"
 #include "hw_msp.h"
 #include "lorawan_debug.h"

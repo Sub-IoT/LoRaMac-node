@@ -59,41 +59,66 @@ Maintainer: Miguel Luis and Gregory Cristian
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
 
-#define BOARD_WAKEUP_TIME  5 //TCXO
-
-
-
-
-
-#define RF_MID_BAND_THRESH                          525000000
-
-/* Exported functions ------------------------------------------------------- */ 
-
-/*!
- * \brief Initializes the radio I/Os pins interface
+/*
+ * Implementations of the radio functions, primarily providing an interface to the oss-7 sx127x drivers in the LoRaMac-node expected format. 
+ * See src/radio/radio.h for documentation of each of these functions. 
  */
-void SX1276IoInit( void );
+
+void   SX127xIoInit ( void );
+
+void   SX127xIoDeInit ( void );
+
+uint32_t SX127xInit( RadioEvents_t *events );
+
+RadioState_t SX127xGetStatus( void );
+
+void SX127xSetModem( RadioModems_t modem );
+
+void SX127xSetRxConfig( RadioModems_t modem, uint32_t bandwidth,
+                         uint32_t datarate, uint8_t coderate,
+                         uint32_t bandwidthAfc, uint16_t preambleLen,
+                         uint16_t symbTimeout, bool fixLen,
+                         uint8_t payloadLen,
+                         bool crcOn, bool freqHopOn, uint8_t hopPeriod,
+                         bool iqInverted, bool rxContinuous );
+
+void SX127xSetTxConfig( RadioModems_t modem, int8_t power, uint32_t fdev,
+                        uint32_t bandwidth, uint32_t datarate,
+                        uint8_t coderate, uint16_t preambleLen,
+                        bool fixLen, bool crcOn, bool freqHopOn,
+                        uint8_t hopPeriod, bool iqInverted, uint32_t timeout );
+
+bool SX127xCheckRfFrequency( uint32_t frequency );
+
+static uint32_t SX127xGetGfskTimeOnAirNumerator( uint16_t preambleLen, bool fixLen,
+                                                 uint8_t payloadLen, bool crcOn ); 
+
+static uint32_t SX127xGetLoRaTimeOnAirNumerator( uint32_t bandwidth,
+                              uint32_t datarate, uint8_t coderate,
+                              uint16_t preambleLen, bool fixLen, uint8_t payloadLen,
+                              bool crcOn );
+
+static uint32_t SX127xGetLoRaBandwidthInHz( uint32_t bw );
 
 
-/*!
- * \brief De-initializes the radio I/Os pins interface. 
- *
- * \remark Useful when going in MCU lowpower modes
- */
-void SX1276IoDeInit( void );
+uint32_t SX127xGetTimeOnAir( RadioModems_t modem, uint32_t bandwidth,
+                              uint32_t datarate, uint8_t coderate,
+                              uint16_t preambleLen, bool fixLen, uint8_t payloadLen,
+                              bool crcOn );
 
-/*!
- * \brief Checks if the given RF frequency is supported by the hardware
- *
- * \param [IN] frequency RF frequency to be checked
- * \retval isSupported [true: supported, false: unsupported]
- */
-bool SX1276CheckRfFrequency( uint32_t frequency );
+void  SX127xSend( uint8_t *buffer, uint8_t size );
 
-/*!
- * Radio hardware and global parameters
- */
-extern SX1276_t SX1276;
+void SX127xSetSleep( void );
+
+void SX127xSetStby( void );
+
+void SX127xSetRx( uint32_t timeout );
+
+int16_t SX127xReadRssi( RadioModems_t modem );
+
+void SX127xSetMaxPayloadLength( RadioModems_t modem, uint8_t max );
+
+uint32_t SX127xGetWakeupTime( void );
 
 #ifdef __cplusplus
 }

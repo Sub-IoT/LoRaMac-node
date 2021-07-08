@@ -78,6 +78,7 @@ Maintainer: Miguel Luis and Gregory Cristian
  */
 #define BOARD_TCXO_WAKEUP_TIME                      5
 
+#define RADIO_WAKEUP_TIME                           1 // [ms] Radio wake-up time from sleep
 
 /* LORA I/O definition */
    
