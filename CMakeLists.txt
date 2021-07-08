@@ -71,13 +71,9 @@ src/peripherals/soft-se/soft-se-hal.c
 src/peripherals/soft-se/soft-se.c
 src/system/timeServer.c
 src/boards/mcu/utilities.c
-src/system/delay.c
 src/system/systime.c
-src/radio/sx1276/sx1276.c
 ST/BSP/MLM32L07X01/mlm32l07x01.c    # TODO only for lrwan1 board
 ST/hw_rtc.c
-ST/hw_gpio.c
-ST/hw_spi.c
 ST/low_power.c
 ST/stm32l0xx_hw.c   # TODO remove?
 lorawan_stack.c
@@ -94,7 +90,6 @@ target_include_directories(lorawan PUBLIC
     src/boards
     src/peripherals/soft-se
     src/radio
-    src/radio/sx1276
     ST
     ${__global_include_dirs}
     ${CMAKE_BINARY_DIR}/framework/ #framework_defs.h

@@ -158,7 +158,7 @@ struct Radio_s
      *
      * \retval isFree         [true: Channel is free, false: Channel is not free]
      */
-    bool    ( *IsChannelFree )( uint32_t freq, uint32_t rxBandwidth, int16_t rssiThresh, uint32_t maxCarrierSenseTime );
+    //bool    ( *IsChannelFree )( uint32_t freq, uint32_t rxBandwidth, int16_t rssiThresh, uint32_t maxCarrierSenseTime );
     /*!
      * \brief Generates a 32 bits random value based on the RSSI readings
      *
@@ -318,7 +318,7 @@ struct Radio_s
     /*!
      * \brief Start a Channel Activity Detection
      */
-    void    ( *StartCad )( void );
+    //void    ( *StartCad )( void );
     /*!
      * \brief Sets the radio in continuous wave transmission mode
      *
@@ -339,14 +339,14 @@ struct Radio_s
      * \param [IN]: addr Register address
      * \param [IN]: data New register value
      */
-    void    ( *Write )( uint32_t addr, uint8_t data );
+    //void    ( *Write )( uint32_t addr, uint8_t data );
     /*!
      * \brief Reads the radio register at the specified address
      *
      * \param [IN]: addr Register address
      * \retval data Register value
      */
-    uint8_t ( *Read )( uint32_t addr );
+    //uint8_t ( *Read )( uint32_t addr );
     /*!
      * \brief Writes multiple radio registers starting at address
      *
@@ -354,7 +354,7 @@ struct Radio_s
      * \param [IN] buffer Buffer containing the new register's values
      * \param [IN] size   Number of registers to be written
      */
-    void    ( *WriteBuffer )( uint32_t addr, uint8_t *buffer, uint8_t size );
+    //void    ( *WriteBuffer )( uint32_t addr, uint8_t *buffer, uint8_t size );
     /*!
      * \brief Reads multiple radio registers starting at address
      *
@@ -362,7 +362,7 @@ struct Radio_s
      * \param [OUT] buffer Buffer where to copy the registers data
      * \param [IN] size Number of registers to be read
      */
-    void    ( *ReadBuffer )( uint32_t addr, uint8_t *buffer, uint8_t size );
+    //void    ( *ReadBuffer )( uint32_t addr, uint8_t *buffer, uint8_t size );
     /*!
      * \brief Sets the maximum payload length.
      *

@@ -93,8 +93,6 @@ void HW_Init( void )
     Radio.IoInit( );
 
     HW_RTC_Init( );
-    
-    HW_SPI_Init( );
 
     McuInitialized = true;
   }
@@ -106,9 +104,7 @@ void HW_Init( void )
   * @retval None
   */
 void HW_DeInit( void )
-{
-  HW_SPI_DeInit( );
-  
+{  
   Radio.IoDeInit( );
 
   McuInitialized = false;
