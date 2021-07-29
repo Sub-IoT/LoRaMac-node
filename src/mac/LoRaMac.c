@@ -5684,9 +5684,10 @@ void LoRaMacTestSetDutyCycleOn( bool enable )
 
 LoRaMacStatus_t LoRaMacDeInitialization( void )
 {
+    // leaving as commented out to indicate that this forced deinit is a change from the regular LoRaMac
     // Check the current state of the LoRaMac
-    if ( LoRaMacStop( ) == LORAMAC_STATUS_OK )
-    {
+    /*if ( LoRaMacStop( ) == LORAMAC_STATUS_OK )
+    {*/
         // Stop Timers
         TimerStop( &MacCtx.TxDelayedTimer );
         TimerStop( &MacCtx.RxWindowTimer1 );
@@ -5710,11 +5711,11 @@ LoRaMacStatus_t LoRaMacDeInitialization( void )
 
         // Return success
         return LORAMAC_STATUS_OK;
-    }
+    /*}
     else
     {
         return LORAMAC_STATUS_BUSY;
-    }
+    }*/
 }
 
 void LoRaMacReset( void )
