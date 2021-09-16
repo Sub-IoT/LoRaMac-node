@@ -30,6 +30,9 @@
  *
  * \author    Johannes Bruder ( STACKFORCE )
  */
+
+#pragma GCC diagnostic ignored "-Wstack-usage="
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>

@@ -28,6 +28,8 @@
  *
  * \author    Daniel Jaeckle ( STACKFORCE )
 */
+#pragma GCC diagnostic ignored "-Wstack-usage="
+
 #include "utilities.h"
 
 #include "RegionCommon.h"

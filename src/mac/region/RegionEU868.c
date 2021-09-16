@@ -324,23 +324,16 @@ void RegionEU868SetBandTxDone( SetBandTxDoneParams_t* txDone )
 
 void RegionEU868InitDefaults( InitDefaultsParams_t* params )
 {
-    Band_t bands[EU868_MAX_NB_BANDS] =
-    {
-        EU868_BAND0,
-        EU868_BAND1,
-        EU868_BAND2,
-        EU868_BAND3,
-        EU868_BAND4,
-        EU868_BAND5,
-    };
-
     switch( params->Type )
     {
         case INIT_TYPE_DEFAULTS:
         {
-            // Default bands
-            memcpy1( ( uint8_t* )NvmCtx.Bands, ( uint8_t* )bands, sizeof( Band_t ) * EU868_MAX_NB_BANDS );
-
+            NvmCtx.Bands[0] = ( Band_t ) EU868_BAND0;
+            NvmCtx.Bands[1] = ( Band_t ) EU868_BAND1;
+            NvmCtx.Bands[2] = ( Band_t ) EU868_BAND2;
+            NvmCtx.Bands[3] = ( Band_t ) EU868_BAND3;
+            NvmCtx.Bands[4] = ( Band_t ) EU868_BAND4;
+            NvmCtx.Bands[5] = ( Band_t ) EU868_BAND5;
             // Default channels
             NvmCtx.Channels[0] = ( ChannelParams_t ) EU868_LC1;
             NvmCtx.Channels[1] = ( ChannelParams_t ) EU868_LC2;
