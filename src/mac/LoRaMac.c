@@ -867,16 +867,91 @@ static void PrepareRxDoneAbort( void )
     UpdateRxSlotIdleState( );
 }
 
+static void ProcessRadioRxDoneJoinAccept( uint16_t size, uint8_t *payload ) 
+{
+    
+    // Check if the received frame size is valid
+    if( size < LORAMAC_JOIN_ACCEPT_FRAME_MIN_SIZE )
+    {
+        MacCtx.McpsIndication.Status = LORAMAC_EVENT_INFO_STATUS_ERROR;
+        PrepareRxDoneAbort( );
+        return;
+    }
+    ApplyCFListParams_t applyCFList;
+    LoRaMacMessageJoinAccept_t macMsgJoinAccept;
+    macMsgJoinAccept.Buffer = payload;
+    macMsgJoinAccept.BufSize = size;
+
+    // Abort in case if the device isn't joined yet and no rejoin request is ongoing.
+    if( MacCtx.NvmCtx->NetworkActivation != ACTIVATION_TYPE_NONE )
+    {
+        MacCtx.McpsIndication.Status = LORAMAC_EVENT_INFO_STATUS_ERROR;
+        PrepareRxDoneAbort( );
+        return;
+    }
+
+    LoRaMacCryptoStatus_t macCryptoStatus = LORAMAC_CRYPTO_ERROR;
+    macCryptoStatus = LoRaMacCryptoHandleJoinAccept( JOIN_REQ, MacCtx.MacCallbacks->GetAppEui( ), &macMsgJoinAccept ); // in oss-7, no secure element inside the lorawan stack is used.
+
+    if( LORAMAC_CRYPTO_SUCCESS == macCryptoStatus )
+    {
+        // Network ID
+        MacCtx.NvmCtx->NetID = ( uint32_t ) macMsgJoinAccept.NetID[0];
+        MacCtx.NvmCtx->NetID |= ( ( uint32_t ) macMsgJoinAccept.NetID[1] << 8 );
+        MacCtx.NvmCtx->NetID |= ( ( uint32_t ) macMsgJoinAccept.NetID[2] << 16 );
+
+        // Device Address
+        MacCtx.NvmCtx->DevAddr = macMsgJoinAccept.DevAddr;
+
+        // DLSettings
+        MacCtx.NvmCtx->MacParams.Rx1DrOffset = macMsgJoinAccept.DLSettings.Bits.RX1DRoffset;
+        MacCtx.NvmCtx->MacParams.Rx2Channel.Datarate = macMsgJoinAccept.DLSettings.Bits.RX2DataRate;
+        MacCtx.NvmCtx->MacParams.RxCChannel.Datarate = macMsgJoinAccept.DLSettings.Bits.RX2DataRate;
+
+        // RxDelay
+        MacCtx.NvmCtx->MacParams.ReceiveDelay1 = macMsgJoinAccept.RxDelay;
+        if( MacCtx.NvmCtx->MacParams.ReceiveDelay1 == 0 )
+        {
+            MacCtx.NvmCtx->MacParams.ReceiveDelay1 = 1;
+        }
+        MacCtx.NvmCtx->MacParams.ReceiveDelay1 *= 1000;
+        MacCtx.NvmCtx->MacParams.ReceiveDelay2 = MacCtx.NvmCtx->MacParams.ReceiveDelay1 + 1000;
+
+        MacCtx.NvmCtx->Version.Fields.Minor = 0;
+
+        // Apply CF list
+        applyCFList.Payload = macMsgJoinAccept.CFList;
+        // Size of the regular payload is 12. Plus 1 byte MHDR and 4 bytes MIC
+        applyCFList.Size = size - 17;
+
+        RegionApplyCFList( MacCtx.NvmCtx->Region, &applyCFList );
+
+        MacCtx.NvmCtx->NetworkActivation = ACTIVATION_TYPE_OTAA;
+
+        // MLME handling
+        if( LoRaMacConfirmQueueIsCmdActive( MLME_JOIN ) == true )
+        {
+            LoRaMacConfirmQueueSetStatus( LORAMAC_EVENT_INFO_STATUS_OK, MLME_JOIN );
+        }
+    }
+    else
+    {
+        // MLME handling
+        if( LoRaMacConfirmQueueIsCmdActive( MLME_JOIN ) == true )
+        {
+            LoRaMacConfirmQueueSetStatus( LORAMAC_EVENT_INFO_STATUS_JOIN_FAIL, MLME_JOIN );
+        }
+    }    
+}
+
 static void ProcessRadioRxDone( void )
 {
     LoRaMacHeader_t macHdr;
-    ApplyCFListParams_t applyCFList;
     GetPhyParams_t getPhy;
     PhyParam_t phyParam;
     LoRaMacCryptoStatus_t macCryptoStatus = LORAMAC_CRYPTO_ERROR;
 
     LoRaMacMessageData_t macMsgData;
-    LoRaMacMessageJoinAccept_t macMsgJoinAccept;
     uint8_t *payload = RxDoneParams.Payload;
     uint16_t size = RxDoneParams.Size;
     int16_t rssi = RxDoneParams.Rssi;

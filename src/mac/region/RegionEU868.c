@@ -306,16 +306,6 @@ void RegionEU868SetBandTxDone( SetBandTxDoneParams_t* txDone )
 
 void RegionEU868InitDefaults( InitDefaultsParams_t* params )
 {
-    Band_t bands[EU868_MAX_NB_BANDS] =
-    {
-        EU868_BAND0,
-        EU868_BAND1,
-        EU868_BAND2,
-        EU868_BAND3,
-        EU868_BAND4,
-        EU868_BAND5,
-    };
-
     switch( params->Type )
     {
         case INIT_TYPE_DEFAULTS:
