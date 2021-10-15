@@ -43,6 +43,7 @@ extern "C"
 #endif
 
 #include "region/Region.h"
+#include "MODULE_LORAWAN_defs.h"
 
 
 /*!
@@ -125,13 +126,13 @@ extern "C"
 /*!
  * Default datarate used by the node
  */
-#define AS923_DEFAULT_DATARATE                      DR_2
+#define AS923_DEFAULT_DATARATE                      MODULE_LORAWAN_AS_MINIMUM_DATARATE
 
 /*!
  * The minimum datarate which is used when the
  * dwell time is limited.
  */
-#define AS923_DWELL_LIMIT_DATARATE                  DR_2
+#define AS923_DWELL_LIMIT_DATARATE                  MODULE_LORAWAN_AS_MINIMUM_DATARATE
 
 /*!
  * Minimal Rx1 receive datarate offset
