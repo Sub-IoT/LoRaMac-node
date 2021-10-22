@@ -76,9 +76,7 @@
 #include "d7ap_fs.h"
 #include "errors.h"
 
-#define LORAWAN_LOG_ENABLED 1
-
-#if defined(LORAWAN_LOG_ENABLED) 
+#if defined(MODULE_LORAWAN_LOG_ENABLED) 
 #define DPRINT(...) log_print_stack_string(LOG_STACK_ALP, __VA_ARGS__)
 #define DPRINT_DATA(p, n) log_print_data(p, n)
 #else
@@ -132,6 +130,8 @@ static bool first_init = true;
 static bool lorawan_transmitting = false;
 
 static uint8_t joinRequestTrials = 0;
+
+static float antenna_gain_f = 0.0;
 
 /**
  * @brief Called everytime a LoRaWAN retransmission is executed.
@@ -287,6 +287,12 @@ static void mlme_confirm(MlmeConfirm_t *mlmeConfirm)
         joinRequestTrials = 0;
 
         join_state = STATE_JOINED;
+
+        MibRequestConfirm_t mibReq;
+        mibReq.Type = MIB_ANTENNA_GAIN; //MAC parameters are reset in LoRaMac-Node on every join request sent, so this should be set after a successful join
+        mibReq.Param.AntennaGain = antenna_gain_f;
+        LoRaMacMibSetRequestConfirm( &mibReq );
+
         if(stack_status_callback)
             stack_status_callback(LORAWAN_STACK_JOINED, mlmeConfirm->NbRetries);
       }
@@ -388,6 +394,24 @@ static void set_initial_keys()
 }
 
 /**
+ * @brief set the antenna gain based on the contents of a file
+ * this function gets called after every write of the file so the file can be effectively used to set the max tx power
+ */
+static void lorawan_set_antenna_gain(uint8_t file_id)
+{
+  int8_t antenna_gain;
+  uint32_t length = USER_FILE_LORAWAN_ANTENNA_GAIN_SIZE;
+  d7ap_fs_read_file(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, 0, (uint8_t*) &antenna_gain, &length, ROOT_AUTH);
+
+  antenna_gain_f = (float) antenna_gain;
+
+  MibRequestConfirm_t mibReq;
+  mibReq.Type = MIB_ANTENNA_GAIN;
+  mibReq.Param.AntennaGain = antenna_gain_f;
+  LoRaMacMibSetRequestConfirm( &mibReq );
+}
+
+/**
  * @brief Register the different callbacks
  * @param lorawan_rx_cb: LoRaWAN received data
  * @param lorawan_tx_cb: LoRaWAN transmitted data
@@ -470,8 +494,11 @@ lorawan_stack_status_t lorawan_otaa_is_joined(lorawan_session_config_otaa_t* lor
 error_t lorawan_stack_init_otaa() { 
   if(inited)
     return EALREADY;
-  if(first_init)
-      set_initial_keys(); 
+  if(first_init) {
+    set_initial_keys();
+    lorawan_set_antenna_gain(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID);
+  }
+       
 
   HW_Init(); // TODO refactor*/
   join_state = STATE_NOT_JOINED;
@@ -513,6 +540,17 @@ error_t lorawan_stack_init_otaa() {
   mibReq.Param.NwkKey = appKey; 
   LoRaMacMibSetRequestConfirm( &mibReq );
 
+  if(region == EU868) {
+    mibReq.Type = MIB_DEFAULT_ANTENNA_GAIN;
+    mibReq.Param.DefaultAntennaGain = MODULE_LORAWAN_EU_DEFAULT_ANTENNA_GAIN;
+    LoRaMacMibSetRequestConfirm( &mibReq );
+  } else if(region == US915) {
+    mibReq.Type = MIB_DEFAULT_ANTENNA_GAIN;
+    mibReq.Param.DefaultAntennaGain = MODULE_LORAWAN_US_DEFAULT_ANTENNA_GAIN;
+    LoRaMacMibSetRequestConfirm( &mibReq );
+  }
+  
+
 #if defined( REGION_EU868 )
   LoRaMacTestSetDutyCycleOn(true);
 
@@ -539,6 +577,8 @@ error_t lorawan_stack_init_otaa() {
   LoRaMacStart( ); // start up the LoRaMac (change from default state, which is LORAMAC_STOPPED)
   
   sched_register_task(&LoRaMacProcess);
+
+  d7ap_fs_register_file_modified_callback(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, &lorawan_set_antenna_gain);
   
   inited = true;
 
@@ -560,6 +600,7 @@ void lorawan_stack_deinit(){
     lorawan_transmitting = false;
     HW_DeInit();
     adr_enabled = false;
+    d7ap_fs_unregister_file_modified_callback(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID);
 }
 
 /**

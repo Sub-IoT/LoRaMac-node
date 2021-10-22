@@ -551,14 +551,14 @@ bool RegionUS915TxConfig( TxConfigParams_t* txConfig, int8_t* txPower, TimerTime
     int8_t phyTxPower = 0;
 
     // Calculate physical TX power
-    phyTxPower = RegionCommonComputeTxPower( txPowerLimited, US915_DEFAULT_MAX_ERP, 0 );
+    phyTxPower = RegionCommonComputeTxPower( txPowerLimited, US915_DEFAULT_MAX_ERP, txConfig->AntennaGain );
 
     // Setup the radio frequency
     Radio.SetChannel( RegionNvmGroup2->Channels[txConfig->Channel].Frequency );
 
     Radio.SetTxConfig( MODEM_LORA, phyTxPower, 0, bandwidth, phyDr, 1, 8, false, true, 0, 0, false, 4000 );
 
-    DBG_PRINTF( "TX on freq %d Hz at DR %d\n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate );
+    DBG_PRINTF( "TX on freq %d Hz at DR %d and Tx Power %d \n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate, phyTxPower );
     
     // Setup maximum payload lenght of the radio driver
     Radio.SetMaxPayloadLength( MODEM_LORA, txConfig->PktLen );
