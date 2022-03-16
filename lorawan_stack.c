@@ -402,7 +402,32 @@ static void lorawan_set_antenna_gain(uint8_t file_id)
 {
   int8_t antenna_gain;
   uint32_t length = USER_FILE_LORAWAN_ANTENNA_GAIN_SIZE;
-  d7ap_fs_read_file(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, 0, (uint8_t*) &antenna_gain, &length, ROOT_AUTH);
+  int res = d7ap_fs_read_file(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, 0, (uint8_t*) &antenna_gain, &length, ROOT_AUTH);
+
+  if(res == -ENOENT) {
+      // file does not exist yet (older filesystem version), create it
+      if(region == EU868) {
+        antenna_gain = MODULE_LORAWAN_EU_DEFAULT_ANTENNA_GAIN;  //dBm #in EU868 the MAX_EIRP is 16dBm so this corresponds to a max TX power of 15dBm 
+      } else if(region == US915) {
+        antenna_gain = MODULE_LORAWAN_US_DEFAULT_ANTENNA_GAIN; //dBm #in US915 the MAX_EIRP is 30dBm so this corresponds to a max TX power of 15dBm
+      } else if(region == AS923) {
+        antenna_gain = MODULE_LORAWAN_AS_DEFAULT_ANTENNA_GAIN;  //dBm #in AS915 the MAX_EIRP is 16dBm so this corresponds to a max TX power of 15dBm
+      }
+
+      uint8_t antenna_gain_file[1] = {
+          (uint8_t) antenna_gain,
+      };
+        
+      d7ap_fs_file_header_t volatile_file_header = {
+        .file_permissions = (file_permission_t){ .guest_read = true, .user_read = true },
+        .file_properties.storage_class = FS_STORAGE_PERMANENT,
+        .length                        = USER_FILE_LORAWAN_ANTENNA_GAIN_SIZE,
+        .allocated_length              = USER_FILE_LORAWAN_ANTENNA_GAIN_SIZE
+      };
+
+      // initialize file on fs
+      int ret = d7ap_fs_init_file(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, &volatile_file_header, antenna_gain_file);
+  }
 
   antenna_gain_f = (float) antenna_gain;
 
@@ -548,6 +573,10 @@ error_t lorawan_stack_init_otaa() {
   } else if(region == US915) {
     mibReq.Type = MIB_DEFAULT_ANTENNA_GAIN;
     mibReq.Param.DefaultAntennaGain = MODULE_LORAWAN_US_DEFAULT_ANTENNA_GAIN;
+    LoRaMacMibSetRequestConfirm( &mibReq );
+  } else if(region == AS923) {
+    mibReq.Type = MIB_DEFAULT_ANTENNA_GAIN;
+    mibReq.Param.DefaultAntennaGain = MODULE_LORAWAN_AS_DEFAULT_ANTENNA_GAIN;
     LoRaMacMibSetRequestConfirm( &mibReq );
   }
   
