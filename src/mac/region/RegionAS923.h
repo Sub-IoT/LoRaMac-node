@@ -177,7 +177,7 @@ extern "C"
 /*!
  * Enabled or disabled the duty cycle
  */
-#define AS923_DUTY_CYCLE_ENABLED                    0
+#define AS923_DUTY_CYCLE_ENABLED                    MODULE_LORAWAN_AS_DUTY_CYCLE_ON
 
 /*!
  * Maximum RX window duration

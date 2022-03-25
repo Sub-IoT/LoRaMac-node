@@ -510,7 +510,7 @@ bool RegionRU864RxConfig( RxConfigParams_t* rxConfig, int8_t* datarate )
 
     Radio.SetMaxPayloadLength( modem, MaxPayloadOfDatarateRU864[dr] + LORAMAC_FRAME_PAYLOAD_OVERHEAD_SIZE );
 
-    DBG_PRINTF( "RX on freq %d Hz at DR %d\n\r", frequency, dr );
+    DPRINT( "RX on freq %d Hz at DR %d\n\r", frequency, dr );
 
     *datarate = (uint8_t) dr;
     return true;
@@ -544,7 +544,7 @@ bool RegionRU864TxConfig( TxConfigParams_t* txConfig, int8_t* txPower, TimerTime
     // Update time-on-air
     *txTimeOnAir = GetTimeOnAir( txConfig->Datarate, txConfig->PktLen );
 
-    DBG_PRINTF( "TX on freq %d Hz at DR %d\n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate );
+    DPRINT( "TX on freq %d Hz at DR %d\n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate );
     
     // Setup maximum payload lenght of the radio driver
     Radio.SetMaxPayloadLength( modem, txConfig->PktLen );
