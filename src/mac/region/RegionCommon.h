@@ -46,6 +46,15 @@ extern "C"
 #include "LoRaMacHeaderTypes.h"
 #include "region/Region.h"
 #include "lorawan_debug.h"
+#include "MODULE_LORAWAN_defs.h"
+
+#if defined(MODULE_LORAWAN_LOG_ENABLED) 
+#define DPRINT(...) log_print_stack_string(LOG_STACK_ALP, __VA_ARGS__)
+#define DPRINT_DATA(p, n) log_print_data(p, n)
+#else
+#define DPRINT(...)
+#define DPRINT_DATA(p, n)
+#endif
 
 // Constants that are common to all the regions.
 

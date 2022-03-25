@@ -418,7 +418,7 @@ static void lorawan_set_antenna_gain(uint8_t file_id)
           (uint8_t) antenna_gain,
       };
         
-      d7ap_fs_file_header_t volatile_file_header = {
+      d7ap_fs_file_header_t file_header = {
         .file_permissions = (file_permission_t){ .guest_read = true, .user_read = true },
         .file_properties.storage_class = FS_STORAGE_PERMANENT,
         .length                        = USER_FILE_LORAWAN_ANTENNA_GAIN_SIZE,
@@ -426,7 +426,7 @@ static void lorawan_set_antenna_gain(uint8_t file_id)
       };
 
       // initialize file on fs
-      int ret = d7ap_fs_init_file(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, &volatile_file_header, antenna_gain_file);
+      int ret = d7ap_fs_init_file(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, &file_header, antenna_gain_file);
   }
 
   antenna_gain_f = (float) antenna_gain;
