@@ -387,7 +387,7 @@ struct Radio_s
     /*!
      * \brief Process radio irq
      */
-    void ( *IrqProcess )( void );
+    //void ( *IrqProcess )( void );
     /*
      * The next functions are available only on SX126x radios.
      */
@@ -399,7 +399,7 @@ struct Radio_s
      * \param [IN] timeout Reception timeout [ms]
      *                     [0: continuous, others timeout]
      */
-    void    ( *RxBoosted )( uint32_t timeout );
+    //void    ( *RxBoosted )( uint32_t timeout );
     /*!
      * \brief Sets the Rx duty cycle management parameters
      *
@@ -408,7 +408,7 @@ struct Radio_s
      * \param [in]  rxTime        Structure describing reception timeout value
      * \param [in]  sleepTime     Structure describing sleep timeout value
      */
-    void ( *SetRxDutyCycle ) ( uint32_t rxTime, uint32_t sleepTime );
+    //void ( *SetRxDutyCycle ) ( uint32_t rxTime, uint32_t sleepTime );
 };
 
 /*!

@@ -2683,7 +2683,7 @@ static void ProcessMacCommands( uint8_t *payload, uint8_t macIndex, uint8_t comm
             }
             case SRV_MAC_PING_SLOT_CHANNEL_REQ:
             {
-                uint8_t status = 0x03;
+                status = 0x03;
                 uint32_t frequency = 0;
                 uint8_t datarate;
 
