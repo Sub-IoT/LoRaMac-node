@@ -336,6 +336,7 @@ void SX127xSetMaxPayloadLength( RadioModems_t modem, uint8_t max ) {
     switch(modem) {
         case MODEM_FSK:
             hw_radio_set_payload_length(max);
+            break;
         case MODEM_LORA:
             hw_lora_set_max_payload_length(max);
     }

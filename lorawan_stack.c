@@ -112,8 +112,6 @@ static uint8_t devEui[8] = { 0 };     //used for OTAA
 static uint8_t appEui[8] = { 0 };     //used for OTAA
 static uint8_t appKey[16] = { 0 };    
 
-static uint8_t app_port;
-static bool request_ack;
 bool adr_enabled = false;
 uint8_t datarate = 0; 
 
@@ -471,8 +469,6 @@ lorawan_stack_status_t lorawan_otaa_is_joined(lorawan_session_config_otaa_t* lor
 
   bool joined = (join_state == STATE_JOINED);
   sched_cancel_task(&run_fsm);
-  app_port=lorawan_session_config->application_port;
-  request_ack=lorawan_session_config->request_ack;
   datarate = lorawan_session_config->data_rate;
   
   if( adr_enabled != lorawan_session_config->adr_enabled)
