@@ -669,14 +669,23 @@ lorawan_stack_status_t lorawan_stack_send(uint8_t* payload, uint8_t length, uint
   LoRaMacTxInfo_t txInfo;
   if(LoRaMacQueryTxPossible(app_data.BuffSize, &txInfo) != LORAMAC_STATUS_OK )
   {
-    // Send empty frame in order to flush MAC commands
-    DPRINT("TX not possible, max payloadsize %i, trying to transmit %i", txInfo.MaxPossibleApplicationDataSize, txInfo.CurrentPossiblePayloadSize);
-    mcpsReq.Type = MCPS_UNCONFIRMED;
-    mcpsReq.Req.Unconfirmed.fBuffer = NULL;
-    mcpsReq.Req.Unconfirmed.fBufferSize = 0;
-    mcpsReq.Req.Unconfirmed.Datarate = datarate;
-    LoRaMacMcpsRequest(&mcpsReq);
-    return LORAWAN_STACK_ERROR_TX_NOT_POSSIBLE;
+    if(app_data.BuffSize > txInfo.CurrentPossiblePayloadSize)
+    {
+      // payload size is too big for frame, cannot send
+      DPRINT("TX not possible, max payloadsize %i, trying to transmit %i", txInfo.CurrentPossiblePayloadSize, app_data.BuffSize);
+      return LORAWAN_STACK_ERROR_TX_NOT_POSSIBLE;
+    } else {
+      // payload size + MAC commands is too big,
+      // Send empty frame in order to flush MAC commands
+      DPRINT("TX not possible, max payloadsize %i, trying to transmit %i and %i bytes of MAC commands", txInfo.CurrentPossiblePayloadSize, app_data.BuffSize, txInfo.CurrentPossiblePayloadSize - txInfo.MaxPossibleApplicationDataSize);
+      DPRINT("Flush MAC commands");
+      mcpsReq.Type = MCPS_UNCONFIRMED;
+      mcpsReq.Req.Unconfirmed.fBuffer = NULL;
+      mcpsReq.Req.Unconfirmed.fBufferSize = 0;
+      mcpsReq.Req.Unconfirmed.Datarate = datarate;
+      LoRaMacMcpsRequest(&mcpsReq);
+      return LORAWAN_STACK_ALREADY_TRANSMITTING;
+    }
   }
 
   if(!request_ack)
