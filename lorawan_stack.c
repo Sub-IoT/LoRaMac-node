@@ -93,6 +93,7 @@
 #define EU868 LORAMAC_REGION_EU868
 #define US915 LORAMAC_REGION_US915
 #define AS923 LORAMAC_REGION_AS923
+#define AU915 LORAMAC_REGION_AU915
 
 const LoRaMacRegion_t region = MODULE_LORAWAN_REGION;
 
@@ -404,13 +405,7 @@ static void lorawan_set_antenna_gain(uint8_t file_id)
 
   if(res == -ENOENT) {
       // file does not exist yet (older filesystem version), create it
-      if(region == EU868) {
-        antenna_gain = MODULE_LORAWAN_EU_DEFAULT_ANTENNA_GAIN;  //dBm #in EU868 the MAX_EIRP is 16dBm so this corresponds to a max TX power of 15dBm 
-      } else if(region == US915) {
-        antenna_gain = MODULE_LORAWAN_US_DEFAULT_ANTENNA_GAIN; //dBm #in US915 the MAX_EIRP is 30dBm so this corresponds to a max TX power of 15dBm
-      } else if(region == AS923) {
-        antenna_gain = MODULE_LORAWAN_AS_DEFAULT_ANTENNA_GAIN;  //dBm #in AS915 the MAX_EIRP is 16dBm so this corresponds to a max TX power of 15dBm
-      }
+      antenna_gain = MODULE_LORAWAN_DEFAULT_ANTENNA_GAIN;
 
       uint8_t antenna_gain_file[1] = {
           (uint8_t) antenna_gain,
@@ -562,19 +557,9 @@ error_t lorawan_stack_init_otaa() {
   mibReq.Param.NwkKey = appKey; 
   LoRaMacMibSetRequestConfirm( &mibReq );
 
-  if(region == EU868) {
-    mibReq.Type = MIB_DEFAULT_ANTENNA_GAIN;
-    mibReq.Param.DefaultAntennaGain = MODULE_LORAWAN_EU_DEFAULT_ANTENNA_GAIN;
-    LoRaMacMibSetRequestConfirm( &mibReq );
-  } else if(region == US915) {
-    mibReq.Type = MIB_DEFAULT_ANTENNA_GAIN;
-    mibReq.Param.DefaultAntennaGain = MODULE_LORAWAN_US_DEFAULT_ANTENNA_GAIN;
-    LoRaMacMibSetRequestConfirm( &mibReq );
-  } else if(region == AS923) {
-    mibReq.Type = MIB_DEFAULT_ANTENNA_GAIN;
-    mibReq.Param.DefaultAntennaGain = MODULE_LORAWAN_AS_DEFAULT_ANTENNA_GAIN;
-    LoRaMacMibSetRequestConfirm( &mibReq );
-  }
+  mibReq.Type = MIB_DEFAULT_ANTENNA_GAIN;
+  mibReq.Param.DefaultAntennaGain = MODULE_LORAWAN_DEFAULT_ANTENNA_GAIN;
+  LoRaMacMibSetRequestConfirm( &mibReq );
   
 
 #if defined( REGION_EU868 )

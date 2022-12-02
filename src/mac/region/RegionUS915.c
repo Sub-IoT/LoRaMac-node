@@ -373,7 +373,7 @@ void RegionUS915InitDefaults( InitDefaultsParams_t* params )
             {
                 // 125 kHz channels
                 NvmCtx.Channels[i].Frequency = 902300000 + i * 200000;
-                NvmCtx.Channels[i].DrRange.Value = ( DR_3 << 4 ) | MODULE_LORAWAN_US_MINIMUM_DATARATE;
+                NvmCtx.Channels[i].DrRange.Value = ( DR_3 << 4 ) | MODULE_LORAWAN_MINIMUM_DATARATE;
                 NvmCtx.Channels[i].Band = 0;
             }
             for( uint8_t i = US915_MAX_NB_CHANNELS - 8; i < US915_MAX_NB_CHANNELS; i++ )
@@ -834,7 +834,7 @@ int8_t RegionUS915AlternateDr( int8_t currentDr, AlternateDrType_t type )
     }
     else
     {
-        currentDr = MODULE_LORAWAN_US_MINIMUM_DATARATE;
+        currentDr = MODULE_LORAWAN_MINIMUM_DATARATE;
     }
     return currentDr;
 }
@@ -902,7 +902,7 @@ LoRaMacStatus_t RegionUS915NextChannel( NextChanParams_t* nextChanParams, uint8_
             // Each time a 125 kHz channel will be selected from another group.
 
             // 125kHz Channels (0 - 63) DR0
-            if( nextChanParams->Datarate == MODULE_LORAWAN_US_MINIMUM_DATARATE )
+            if( nextChanParams->Datarate == MODULE_LORAWAN_MINIMUM_DATARATE )
             {
                 if( RegionBaseUSComputeNext125kHzJoinChannel( ( uint16_t* ) NvmCtx.ChannelsMaskRemaining,
                     &NvmCtx.JoinChannelGroupsCurrentIndex, channel ) == LORAMAC_STATUS_PARAMETER_INVALID )
@@ -957,7 +957,7 @@ uint8_t RegionUS915ApplyDrOffset( uint8_t downlinkDwellTime, int8_t dr, int8_t d
 
     if( datarate < 0 )
     {
-        datarate = MODULE_LORAWAN_US_MINIMUM_DATARATE;
+        datarate = MODULE_LORAWAN_MINIMUM_DATARATE;
     }
     return datarate;
 }
