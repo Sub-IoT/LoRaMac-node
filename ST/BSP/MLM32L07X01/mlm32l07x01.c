@@ -102,8 +102,7 @@ uint32_t SX127xInit( RadioEvents_t *events ) {
     init_args.rx_lora_error_cb = events->RxError;
     init_args.rx_lora_timeout_cb = events->RxTimeout;
 
-    hw_radio_init(&init_args);
-
+    return hw_radio_init(&init_args);
 }
 
 RadioState_t SX127xGetStatus( void ) {
