@@ -36,6 +36,7 @@
  */
 #ifndef __REGION_AU915_H__
 #define __REGION_AU915_H__
+#include "MODULE_LORAWAN_defs.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -72,13 +73,13 @@ extern "C"
 /*!
  * Default datarate used by the node
  */
-#define AU915_DEFAULT_DATARATE                      DR_2
+#define AU915_DEFAULT_DATARATE                      MODULE_LORAWAN_MINIMUM_DATARATE
 
 /*!
  * The minimum datarate which is used when the
  * dwell time is limited.
  */
-#define AU915_DWELL_LIMIT_DATARATE                  DR_2
+#define AU915_DWELL_LIMIT_DATARATE                  MODULE_LORAWAN_MINIMUM_DATARATE
 
 /*!
  * Minimal Rx1 receive datarate offset

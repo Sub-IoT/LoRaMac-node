@@ -799,7 +799,7 @@ int8_t RegionUS915AlternateDr( int8_t currentDr, AlternateDrType_t type )
     }
     else
     {
-        currentDr = MODULE_LORAWAN_US_MINIMUM_DATARATE;
+        currentDr = MODULE_LORAWAN_MINIMUM_DATARATE;
     }
     return currentDr;
 }
@@ -867,7 +867,7 @@ LoRaMacStatus_t RegionUS915NextChannel( NextChanParams_t* nextChanParams, uint8_
             // Each time a 125 kHz channel will be selected from another group.
 
             // 125kHz Channels (0 - 63) DR0
-            if( nextChanParams->Datarate == MODULE_LORAWAN_US_MINIMUM_DATARATE )
+            if( nextChanParams->Datarate == MODULE_LORAWAN_MINIMUM_DATARATE )
             {
                 if( RegionBaseUSComputeNext125kHzJoinChannel( ( uint16_t* ) RegionNvmGroup1->ChannelsMaskRemaining,
                     &RegionNvmGroup1->JoinChannelGroupsCurrentIndex, channel ) == LORAMAC_STATUS_PARAMETER_INVALID )
@@ -910,7 +910,7 @@ uint8_t RegionUS915ApplyDrOffset( uint8_t downlinkDwellTime, int8_t dr, int8_t d
 
     if( datarate < 0 )
     {
-        datarate = MODULE_LORAWAN_US_MINIMUM_DATARATE;
+        datarate = MODULE_LORAWAN_MINIMUM_DATARATE;
     }
     return datarate;
 }

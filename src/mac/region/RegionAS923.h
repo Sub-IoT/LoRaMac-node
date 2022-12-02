@@ -126,13 +126,13 @@ extern "C"
 /*!
  * Default datarate used by the node
  */
-#define AS923_DEFAULT_DATARATE                      MODULE_LORAWAN_AS_MINIMUM_DATARATE
+#define AS923_DEFAULT_DATARATE                      MODULE_LORAWAN_MINIMUM_DATARATE
 
 /*!
  * The minimum datarate which is used when the
  * dwell time is limited.
  */
-#define AS923_DWELL_LIMIT_DATARATE                  MODULE_LORAWAN_AS_MINIMUM_DATARATE
+#define AS923_DWELL_LIMIT_DATARATE                  MODULE_LORAWAN_MINIMUM_DATARATE
 
 /*!
  * Minimal Rx1 receive datarate offset
