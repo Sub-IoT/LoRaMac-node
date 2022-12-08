@@ -119,4 +119,4 @@ target_include_directories(lorawan PUBLIC
     ${CMAKE_CURRENT_BINARY_DIR} # MODULE_LORAWAN_defs.h
 )
 
-#TARGET_LINK_LIBRARIES(lorawan m)
+TARGET_LINK_LIBRARIES(lorawan PRIVATE d7ap_fs)
