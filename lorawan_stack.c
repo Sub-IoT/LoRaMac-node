@@ -75,6 +75,7 @@
 #include "MODULE_LORAWAN_defs.h"
 #include "d7ap_fs.h"
 #include "errors.h"
+#include "modem_region.h"
 
 #if defined(MODULE_LORAWAN_LOG_ENABLED) 
 #define DPRINT(...) log_print_stack_string(LOG_STACK_ALP, __VA_ARGS__)
@@ -90,12 +91,7 @@
 #define JOINREQ_NBTRIALS                            48 // (>=48 according to spec)
 #define LORAWAN_APP_DATA_BUFF_SIZE                  222 // TODO = max?
 
-#define EU868 LORAMAC_REGION_EU868
-#define US915 LORAMAC_REGION_US915
-#define AS923 LORAMAC_REGION_AS923
-#define AU915 LORAMAC_REGION_AU915
-
-const LoRaMacRegion_t region = MODULE_LORAWAN_REGION;
+const modem_region_t region = MODULE_LORAWAN_REGION; //TODO: make AS923_x configurable
 
 typedef enum
 {
@@ -504,6 +500,52 @@ lorawan_stack_status_t lorawan_otaa_is_joined(lorawan_session_config_otaa_t* lor
     return joined ? LORAWAN_STACK_ERROR_OK : LORAWAN_STACK_ERROR_NOT_JOINED;
 }
 
+static LoRaMacRegion_t lorawan_get_region()
+{
+    switch (region)
+    {
+      case MODEM_REGION_AS923_1_DUTY_CYCLE:
+      {
+        return LORAMAC_REGION_AS923;
+      }
+      case MODEM_REGION_AU915:
+      {
+        return LORAMAC_REGION_AU915;
+      }
+      case MODEM_REGION_EU868:
+      {
+        return LORAMAC_REGION_EU868;
+      }
+      case MODEM_REGION_US915:
+      {
+        return LORAMAC_REGION_US915;
+      }
+      case MODEM_REGION_CN470:
+      case MODEM_REGION_CN779:
+      case MODEM_REGION_EU433:
+      case MODEM_REGION_KR920:
+      case MODEM_REGION_IN865:
+      case MODEM_REGION_RU864:
+      case MODEM_REGION_AS923_1_DUTY_CYCLE_DWELL_TIME:
+      case MODEM_REGION_AS923_1_NO_RESTRICTIONS:
+      case MODEM_REGION_AS923_2:
+      case MODEM_REGION_AS923_3:
+      case MODEM_REGION_AS923_4:
+      {
+        log_print_error_string("Error: Unsupported region: %u", region);
+        assert(false);
+        break;
+      }
+      default:
+      {
+        log_print_error_string("Error: return default");
+        break;
+      }
+    }
+    return 0;
+}
+
+
 /**
  * @brief Inits the LoRaWAN stack using over the air activation
  * @param lorawan_session_config
@@ -535,7 +577,7 @@ error_t lorawan_stack_init_otaa() {
   loraMacCallbacks.GetDevEui = &lorawan_get_deveui;
   loraMacCallbacks.GetAppEui = &lorawan_get_appeui;
 
-  loraMacStatus = LoRaMacInitialization(&loraMacPrimitives, &loraMacCallbacks, region);
+  loraMacStatus = LoRaMacInitialization(&loraMacPrimitives, &loraMacCallbacks, lorawan_get_region());
   if(loraMacStatus == LORAMAC_STATUS_OK) {
     DPRINT("init OK");
   } else {
