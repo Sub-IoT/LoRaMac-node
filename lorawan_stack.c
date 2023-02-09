@@ -516,6 +516,10 @@ static LoRaMacRegion_t lorawan_get_region()
       {
         return LORAMAC_REGION_EU868;
       }
+      case MODEM_REGION_IN865:
+      {
+        return LORAMAC_REGION_IN865;
+      }
       case MODEM_REGION_US915:
       {
         return LORAMAC_REGION_US915;
@@ -524,7 +528,6 @@ static LoRaMacRegion_t lorawan_get_region()
       case MODEM_REGION_CN779:
       case MODEM_REGION_EU433:
       case MODEM_REGION_KR920:
-      case MODEM_REGION_IN865:
       case MODEM_REGION_RU864:
       case MODEM_REGION_AS923_1_DUTY_CYCLE_DWELL_TIME:
       case MODEM_REGION_AS923_1_NO_RESTRICTIONS:
