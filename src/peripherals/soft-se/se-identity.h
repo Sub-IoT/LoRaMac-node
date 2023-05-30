@@ -97,7 +97,7 @@ extern "C" {
  */
 #define LORAWAN_DEVICE_ADDRESS                             ( uint32_t )0x00000000
 
-#ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space. When turned off, space for multicast keys (in soft-se) is not allocated.
+#ifdef MODULE_LORAWAN_MULTICAST_ON // in Sub-IoT-Stack, lorawan multicast functionality is made optional in order to save space. When turned off, space for multicast keys (in soft-se) is not allocated.
 #define SOFT_SE_KEY_LIST                                                                                            \
     {                                                                                                               \
         {                                                                                                           \

@@ -45,7 +45,6 @@ extern "C"
 #include "region/Region.h"
 #include "MODULE_LORAWAN_defs.h"
 
-
 /*!
  * Channel plan group AS923-1
  * AS923_FREQ_OFFSET = 0

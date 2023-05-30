@@ -146,7 +146,7 @@ void SX127xSetRxConfig( RadioModems_t modem, uint32_t bandwidth,
     {
     case MODEM_FSK:
         {
-            log_print_error_string("setRxConfig in FSK mode. Unexpected behaviour as in oss-7 FSK mode is not used in the LoRaWAN stack");
+            log_print_error_string("setRxConfig in FSK mode. Unexpected behaviour as in Sub-IoT-Stack FSK mode is not used in the LoRaWAN stack");
             //Note: this may have to change in the future as FSK mode is used as DR7 in CN470-510 and AS923
         }
         break;
@@ -178,7 +178,7 @@ void SX127xSetTxConfig( RadioModems_t modem, int8_t power, uint32_t fdev,
     {
     case MODEM_FSK:
         {
-            log_print_error_string("setTxConfig in FSK mode. Unexpected behaviour as in oss-7 FSK mode is not used in the LoRaWAN stack");
+            log_print_error_string("setTxConfig in FSK mode. Unexpected behaviour as in Sub-IoT-Stack FSK mode is not used in the LoRaWAN stack");
             //Note: this may have to change in the future as FSK mode is used as DR7 in CN470-510 and AS923
         }
         break;

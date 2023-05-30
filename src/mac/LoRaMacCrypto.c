@@ -44,6 +44,7 @@
 #include "LoRaMacSerializer.h"
 #include "LoRaMacCrypto.h"
 
+#include "MODULE_LORAWAN_defs.h"
 /*
  * Frame direction definition for uplink communications
  */
@@ -62,7 +63,7 @@
 /*
  * Number of security context entries
  */
-#ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space.
+#ifdef MODULE_LORAWAN_MULTICAST_ON // in Sub-IoT-Stack, lorawan multicast functionality is made optional in order to save space.
 #define NUM_OF_SEC_CTX                  5
 #else
 #define NUM_OF_SEC_CTX                  1
@@ -118,7 +119,7 @@ static LoRaMacCryptoNvmData_t* CryptoNvm;
  */
 static KeyAddr_t KeyAddrList[NUM_OF_SEC_CTX] =
     {
-        #ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space.
+        #ifdef MODULE_LORAWAN_MULTICAST_ON // in Sub-IoT-Stack, lorawan multicast functionality is made optional in order to save space.
         { MULTICAST_0_ADDR, MC_APP_S_KEY_0, MC_NWK_S_KEY_0, MC_KEY_0 },
         { MULTICAST_1_ADDR, MC_APP_S_KEY_1, MC_NWK_S_KEY_1, MC_KEY_1 },
         { MULTICAST_2_ADDR, MC_APP_S_KEY_2, MC_NWK_S_KEY_2, MC_KEY_2 },
@@ -838,7 +839,7 @@ static bool IsJoinNonce11xOk( uint32_t joinNonce )
 /*
  *  API functions
  */
-LoRaMacCryptoStatus_t LoRaMacCryptoInit( LoRaMacCryptoNvmData_t* nvm )
+LoRaMacCryptoStatus_t LoRaMacCryptoInit( LoRaMacCryptoNvmData_t* nvm, uint16_t initialDevNonce )
 {
     if( nvm == NULL )
     {
@@ -856,6 +857,7 @@ LoRaMacCryptoStatus_t LoRaMacCryptoInit( LoRaMacCryptoNvmData_t* nvm )
     CryptoNvm->LrWanVersion.Fields.Minor = 1;
     CryptoNvm->LrWanVersion.Fields.Patch = 1;
     CryptoNvm->LrWanVersion.Fields.Revision = 0;
+    CryptoNvm->DevNonce = initialDevNonce;
 
     // Reset frame counters
     ResetFCnts( );
@@ -972,7 +974,7 @@ LoRaMacCryptoStatus_t LoRaMacCryptoSetKey( KeyIdentifier_t keyID, uint8_t* key )
         return LORAMAC_CRYPTO_ERROR_SECURE_ELEMENT_FUNC;
     }
 
-    #ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space.
+    #ifdef MODULE_LORAWAN_MULTICAST_ON // in in Sub-IoT-Stack, lorawan multicast functionality is made optional in order to save space.
     if( keyID == APP_KEY )
     {
         // Derive lifetime keys
@@ -1203,7 +1205,7 @@ LoRaMacCryptoStatus_t LoRaMacCryptoHandleJoinAccept( JoinReqIdentifier_t joinReq
         return LORAMAC_CRYPTO_FAIL_JOIN_NONCE;
     }
 
-    #ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space.
+    #ifdef MODULE_LORAWAN_MULTICAST_ON // in in Sub-IoT-Stack, lorawan multicast functionality is made optional in order to save space.
     // Derive lifetime keys
     retval = LoRaMacCryptoDeriveMcRootKey( versionMinor, APP_KEY );
     if( retval != LORAMAC_CRYPTO_SUCCESS )
@@ -1479,7 +1481,7 @@ LoRaMacCryptoStatus_t LoRaMacCryptoUnsecureMessage( AddressIdentifier_t addrID, 
     return LORAMAC_CRYPTO_SUCCESS;
 }
 
-#ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space in RAM.
+#ifdef MODULE_LORAWAN_MULTICAST_ON // in in Sub-IoT-Stack, lorawan multicast functionality is made optional in order to save space in RAM.
 LoRaMacCryptoStatus_t LoRaMacCryptoDeriveMcRootKey( uint8_t versionMinor, KeyIdentifier_t keyID )
 {
     // Prevent other keys than AppKey

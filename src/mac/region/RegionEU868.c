@@ -306,6 +306,16 @@ void RegionEU868SetBandTxDone( SetBandTxDoneParams_t* txDone )
 
 void RegionEU868InitDefaults( InitDefaultsParams_t* params )
 {
+    Band_t bands[EU868_MAX_NB_BANDS] =
+    {
+        EU868_BAND0,
+        EU868_BAND1,
+        EU868_BAND2,
+        EU868_BAND3,
+        EU868_BAND4,
+        EU868_BAND5,
+    };
+
     switch( params->Type )
     {
         case INIT_TYPE_DEFAULTS:
@@ -332,6 +342,9 @@ void RegionEU868InitDefaults( InitDefaultsParams_t* params )
 
             // Update the channels mask
             RegionCommonChanMaskCopy( RegionNvmGroup2->ChannelsMask, RegionNvmGroup2->ChannelsDefaultMask, CHANNELS_MASK_SIZE );
+
+            // Reset the joinRequestCounter
+            joinRequestCounter = 0;
             break;
         }
         case INIT_TYPE_RESET_TO_DEFAULT_CHANNELS:
@@ -568,7 +581,7 @@ bool RegionEU868TxConfig( TxConfigParams_t* txConfig, int8_t* txPower, TimerTime
     // Update time-on-air
     *txTimeOnAir = GetTimeOnAir( txConfig->Datarate, txConfig->PktLen );
 
-    DPRINT( "TX on freq %d Hz at DR %d and TX Power %d \n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate, phyTxPower );
+    DPRINT( "TX on freq %d Hz at DR %d and TX Power %d \n\r", RegionNvmGroup2->Channels[txConfig->Channel].Frequency, txConfig->Datarate, phyTxPower );
     
     // Setup maximum payload lenght of the radio driver
     Radio.SetMaxPayloadLength( modem, txConfig->PktLen );

@@ -41,6 +41,7 @@ extern "C"
 
 #include <stdint.h>
 #include "LoRaMacTypes.h"
+#include "MODULE_LORAWAN_defs.h"
 
 /*!
  * Secure-element keys size in bytes
@@ -58,10 +59,15 @@ extern "C"
 #define SE_PIN_SIZE             4
 
 #ifdef SOFT_SE
+
 /*!
  * Number of supported crypto keys for the soft-se
  */
-#define NUM_OF_KEYS             23
+#ifdef MODULE_LORAWAN_MULTICAST_ON 
+#define NUM_OF_KEYS 23
+#else 
+#define NUM_OF_KEYS 9
+#endif // MODULE_LORAWAN_MULTICAST_ON
 
 /*!
  * Key structure definition for the soft-se

@@ -25,12 +25,11 @@
 #include <math.h>
 #include <string.h>
 #include "utilities.h"
-#include "timeServer.h"
-#include "hw.h"
-#include "platform.h"
+#include "timer.h"
 #include "radio.h"
 #include "delay.h"
 #include "sx1276.h"
+#include "sx1276-board.h"
 
 /*!
  * \brief Internal frequency of the radio
@@ -86,26 +85,6 @@ typedef struct
  *         default values
  */
 static void RxChainCalibration( void );
-
-/*
- * Enable spi and radio io
- */
-static void enable_spi_io();
-
-/*
- * Radio driver functions implementation
- */
-void SX1276BoardInit( LoRaBoardCallback_t *callbacks );
-
-/*!
- * \brief Resets the SX1276
- */
-void SX1276Reset( void );
-
-/*!
- * \brief DIO 5 IRQ callback
- */
-void SX1276OnDio5Irq( void );
 
 /*!
  * \brief Sets the SX1276 in transmission mode for the given time
@@ -292,10 +271,6 @@ const FskBandwidth_t FskBandwidths[] =
  * Private global variables
  */
 
-static bool io_inited = false;
-
-static LoRaBoardCallback_t *LoRaBoardCallbacks;
-
 /*!
  * Radio callbacks variable
  */
@@ -333,7 +308,7 @@ TimerEvent_t RxTimeoutSyncWord;
  * Radio driver functions implementation
  */
 
-uint32_t SX1276Init( RadioEvents_t *events )
+void SX1276Init( RadioEvents_t *events )
 {
     uint8_t i;
 
@@ -344,15 +319,13 @@ uint32_t SX1276Init( RadioEvents_t *events )
     TimerInit( &RxTimeoutTimer, SX1276OnTimeoutIrq );
     TimerInit( &RxTimeoutSyncWord, SX1276OnTimeoutIrq );
 
-    LoRaBoardCallbacks->SX1276BoardSetXO( SET ); 
-
     SX1276Reset( );
 
     RxChainCalibration( );
 
     SX1276SetOpMode( RF_OPMODE_SLEEP );
 
-    LoRaBoardCallbacks->SX1276BoardIoIrqInit( DioIrq );
+    SX1276IoIrqInit( DioIrq );
 
     for( i = 0; i < sizeof( RadioRegsInit ) / sizeof( RadioRegisters_t ); i++ )
     {
@@ -363,8 +336,6 @@ uint32_t SX1276Init( RadioEvents_t *events )
     SX1276SetModem( MODEM_FSK );
 
     SX1276.Settings.State = RF_IDLE;
-
-    return ( uint32_t )LoRaBoardCallbacks->SX1276BoardGetWakeTime( ) + RADIO_WAKEUP_TIME;// BOARD_WAKEUP_TIME;
 }
 
 RadioState_t SX1276GetStatus( void )
@@ -1238,27 +1209,36 @@ int16_t SX1276ReadRssi( RadioModems_t modem )
 
 static void SX1276SetOpMode( uint8_t opMode )
 {
+#if defined( USE_RADIO_DEBUG )
+    switch( opMode )
+    {
+        case RF_OPMODE_TRANSMITTER:
+            SX1276DbgPinTxWrite( 1 );
+            SX1276DbgPinRxWrite( 0 );
+            break;
+        case RF_OPMODE_RECEIVER:
+        case RFLR_OPMODE_RECEIVER_SINGLE:
+            SX1276DbgPinTxWrite( 0 );
+            SX1276DbgPinRxWrite( 1 );
+            break;
+        default:
+            SX1276DbgPinTxWrite( 0 );
+            SX1276DbgPinRxWrite( 0 );
+            break;
+    }
+#endif
     if( opMode == RF_OPMODE_SLEEP )
     {
-      SX1276Write( REG_OPMODE, ( SX1276Read( REG_OPMODE ) & RF_OPMODE_MASK ) | opMode );
-      
-      LoRaBoardCallbacks->SX1276BoardSetAntSwLowPower( true );
-      
-      LoRaBoardCallbacks->SX1276BoardSetXO( RESET ); 
-      HW_SPI_disable();
-      hw_radio_io_deinit();
-      io_inited = false;
+        SX1276SetAntSwLowPower( true );
     }
     else
     {
-      LoRaBoardCallbacks->SX1276BoardSetXO( SET ); 
-      
-      LoRaBoardCallbacks->SX1276BoardSetAntSwLowPower( false );
-      
-      LoRaBoardCallbacks->SX1276BoardSetAntSw( opMode );
-      
-      SX1276Write( REG_OPMODE, ( SX1276Read( REG_OPMODE ) & RF_OPMODE_MASK ) | opMode );
+        // Enable TCXO if operating mode different from SLEEP.
+        SX1276SetBoardTcxo( true );
+        SX1276SetAntSwLowPower( false );
+        SX1276SetAntSw( opMode );
     }
+    SX1276Write( REG_OPMODE, ( SX1276Read( REG_OPMODE ) & RF_OPMODE_MASK ) | opMode );
 }
 
 void SX1276SetModem( RadioModems_t modem )
@@ -1314,39 +1294,35 @@ void SX1276WriteBuffer( uint32_t addr, uint8_t *buffer, uint8_t size )
 {
     uint8_t i;
 
-    enable_spi_io();
-
     //NSS = 0;
-    HW_GPIO_Write( RADIO_NSS_PORT, RADIO_NSS_PIN, 0 );
+    GpioWrite( &SX1276.Spi.Nss, 0 );
 
-    HW_SPI_InOut( addr | 0x80 );
+    SpiInOut( &SX1276.Spi, addr | 0x80 );
     for( i = 0; i < size; i++ )
     {
-        HW_SPI_InOut( buffer[i] );
+        SpiInOut( &SX1276.Spi, buffer[i] );
     }
 
     //NSS = 1;
-    HW_GPIO_Write( RADIO_NSS_PORT, RADIO_NSS_PIN, 1 );
+    GpioWrite( &SX1276.Spi.Nss, 1 );
 }
 
 void SX1276ReadBuffer( uint32_t addr, uint8_t *buffer, uint8_t size )
 {
     uint8_t i;
 
-    enable_spi_io();
-
     //NSS = 0;
-    HW_GPIO_Write( RADIO_NSS_PORT, RADIO_NSS_PIN, 0 );
+    GpioWrite( &SX1276.Spi.Nss, 0 );
 
-    HW_SPI_InOut( addr & 0x7F );
+    SpiInOut( &SX1276.Spi, addr & 0x7F );
 
     for( i = 0; i < size; i++ )
     {
-        buffer[i] = HW_SPI_InOut( 0 );
+        buffer[i] = SpiInOut( &SX1276.Spi, 0 );
     }
 
     //NSS = 1;
-    HW_GPIO_Write( RADIO_NSS_PORT, RADIO_NSS_PIN, 1 );
+    GpioWrite( &SX1276.Spi.Nss, 1 );
 }
 
 static void SX1276WriteFifo( uint8_t *buffer, uint8_t size )
@@ -1654,7 +1630,6 @@ static void SX1276OnDio0Irq( void* context )
                         {
                             // Continuous mode restart Rx chain
                             SX1276Write( REG_RXCONFIG, SX1276Read( REG_RXCONFIG ) | RF_RXCONFIG_RESTARTRXWITHOUTPLLLOCK );
-                            TimerStart( &RxTimeoutSyncWord );
                         }
 
                         if( ( RadioEvents != NULL ) && ( RadioEvents->RxError != NULL ) )
@@ -1700,13 +1675,11 @@ static void SX1276OnDio0Irq( void* context )
                 {
                     // Continuous mode restart Rx chain
                     SX1276Write( REG_RXCONFIG, SX1276Read( REG_RXCONFIG ) | RF_RXCONFIG_RESTARTRXWITHOUTPLLLOCK );
-                    TimerStart( &RxTimeoutSyncWord );
                 }
 
                 if( ( RadioEvents != NULL ) && ( RadioEvents->RxDone != NULL ) )
                 {
                     RadioEvents->RxDone( RxTxBuffer, SX1276.Settings.FskPacketHandler.Size, SX1276.Settings.FskPacketHandler.RssiValue, 0 );
-                    PRINTF( "rxDone\n\r" ); 
                 }
                 SX1276.Settings.FskPacketHandler.PreambleDetected = false;
                 SX1276.Settings.FskPacketHandler.SyncWordDetected = false;
@@ -1801,7 +1774,6 @@ static void SX1276OnDio0Irq( void* context )
                 if( ( RadioEvents != NULL ) && ( RadioEvents->TxDone != NULL ) )
                 {
                     RadioEvents->TxDone( );
-                    PRINTF( "txDone\n\r" );
                 }
                 break;
             }
@@ -1885,7 +1857,6 @@ static void SX1276OnDio1Irq( void* context )
                 if( ( RadioEvents != NULL ) && ( RadioEvents->RxTimeout != NULL ) )
                 {
                     RadioEvents->RxTimeout( );
-                    PRINTF( "rxTimeOut\n\r" ); 
                 }
                 break;
             default:
@@ -1940,9 +1911,10 @@ static void SX1276OnDio2Irq( void* context )
             {
             case MODEM_FSK:
                 // Checks if DIO4 is connected. If it is not PreambleDetected is set to true.
-                #ifndef RADIO_DIO_4
-                SX1276.Settings.FskPacketHandler.PreambleDetected = true;
-                #endif
+                if( SX1276.DIO4.port == NULL )
+                {
+                    SX1276.Settings.FskPacketHandler.PreambleDetected = true;
+                }
 
                 if( ( SX1276.Settings.FskPacketHandler.PreambleDetected != 0 ) && ( SX1276.Settings.FskPacketHandler.SyncWordDetected == 0 ) )
                 {
@@ -2047,78 +2019,4 @@ static void SX1276OnDio4Irq( void* context )
     default:
         break;
     }
-}
-
-void SX1276SetBoardTcxo( uint8_t state )
-{
-    if( state == true )
-    {
-        if( HW_GPIO_Read( RADIO_TCXO_VCC_PORT, RADIO_TCXO_VCC_PIN ) == 0 )
-        { // TCXO OFF power it up.
-            // Power ON the TCXO
-            HW_GPIO_Write( RADIO_TCXO_VCC_PORT, RADIO_TCXO_VCC_PIN, 1 );
-            DelayMs( BOARD_TCXO_WAKEUP_TIME );
-        }
-    }
-    else
-    {
-        // Power OFF the TCXO
-        HW_GPIO_Write( RADIO_TCXO_VCC_PORT, RADIO_TCXO_VCC_PIN, 0 );
-    }
-}
-
-uint32_t SX1276GetBoardTcxoWakeupTime( void )
-{
-    return BOARD_TCXO_WAKEUP_TIME;
-}
-
-void SX1276Reset( void )
-{
-    GPIO_InitTypeDef initStruct = { 0 };
-
-    initStruct.Mode =GPIO_MODE_OUTPUT_PP;
-    initStruct.Pull = GPIO_NOPULL;
-    initStruct.Speed = GPIO_SPEED_HIGH;
-
-    // Set RESET pin to 0
-    HW_GPIO_Init( RADIO_RESET_PORT, RADIO_RESET_PIN, &initStruct );
-    HW_GPIO_Write( RADIO_RESET_PORT, RADIO_RESET_PIN, 0 );
-
-    // Wait 1 ms
-    DelayMs( 1 );
-
-    // Configure RESET as input
-    initStruct.Mode = GPIO_NOPULL;
-    HW_GPIO_Init( RADIO_RESET_PORT, RADIO_RESET_PIN, &initStruct );
-
-    // Wait 6 ms
-    DelayMs( 6 );
-}
-
-void SX1276OnDio5Irq( void )
-{
-    switch( SX1276.Settings.Modem )
-    {
-    case MODEM_FSK:
-        break;
-    case MODEM_LORA:
-        break;
-    default:
-        break;
-    }
-}
-
-static void enable_spi_io() 
-{
-    if(!io_inited)
-    {
-        hw_radio_io_init(false);
-        io_inited = true;
-    }
-    HW_SPI_enable();
-}
-
-void SX1276BoardInit( LoRaBoardCallback_t *callbacks )
-{
-    LoRaBoardCallbacks =callbacks;
 }

@@ -60,7 +60,7 @@ Maintainer: Miguel Luis and Gregory Cristian
 /* Exported constants --------------------------------------------------------*/
 
 /*
- * Implementations of the radio functions, primarily providing an interface to the oss-7 sx127x drivers in the LoRaMac-node expected format. 
+ * Implementations of the radio functions, primarily providing an interface to the Sub-IoT-Stack sx127x drivers in the LoRaMac-node expected format. 
  * See src/radio/radio.h for documentation of each of these functions. 
  */
 

@@ -67,6 +67,7 @@ Maintainer: Miguel Luis and Gregory Cristian
 
 /* Includes ------------------------------------------------------------------*/
 #include "utilities.h"
+#include "timeServer.h"
    
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/

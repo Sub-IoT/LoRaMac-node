@@ -66,7 +66,7 @@ extern "C"
  * Indicates if JoinNonce is counter based and requires to be checked on 1.0.x devices
  * \remark Only applies to LoRaWAN 1.0.x when following recomendations provided
  *         by "Technical Recommendations for Preventing State Synchronization
- *         Issues around LoRaWAN® 1.0.x Join Procedure" 
+ *         Issues around LoRaWAN 1.0.x Join Procedure" 
  *         https://lora-alliance.org/wp-content/uploads/2020/11/lorawan-1.0.x-join-synch-issues-remedies-v1.0.0.pdf
  */
 #define USE_10X_JOIN_NONCE_COUNTER_CHECK            0
@@ -175,7 +175,7 @@ typedef void ( *LoRaMacCryptoNvmEvent )( void );
  *                                      structure.
  * \retval                            - Status of the operation
  */
-LoRaMacCryptoStatus_t LoRaMacCryptoInit( LoRaMacCryptoNvmData_t* nvm );
+LoRaMacCryptoStatus_t LoRaMacCryptoInit( LoRaMacCryptoNvmData_t* nvm, uint16_t initialDevNonce );
 
 /*!
  * Sets the LoRaWAN specification version to be used.

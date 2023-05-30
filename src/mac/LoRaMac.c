@@ -83,6 +83,16 @@ static uint32_t dutyCycleWaitTime = 0;
 static TimerTime_t dutyCycleWaitStartTime;
 
 /*!
+ * Maximum value for the ADR ack counter
+ */
+#define ADR_ACK_COUNTER_MAX                         0xFFFFFFFF
+
+/*!
+ * Delay required to simulate an ABP join like an OTAA join
+ */
+#define ABP_JOIN_PENDING_DELAY_MS                   10
+
+/*!
  * LoRaMac internal states
  */
 enum eLoRaMacState
@@ -814,13 +824,14 @@ static void ProcessRadioTxDone( void )
     }
 
     // Setup timers
-    CRITICAL_SECTION_BEGIN( );
+    BACKUP_PRIMASK();
+    DISABLE_IRQ();
     uint32_t offset = TimerGetCurrentTime( ) - TxDoneParams.CurTime;
     TimerSetValue( &MacCtx.RxWindowTimer1, MacCtx.RxWindow1Delay - offset );
     TimerStart( &MacCtx.RxWindowTimer1 );
     TimerSetValue( &MacCtx.RxWindowTimer2, MacCtx.RxWindow2Delay - offset );
     TimerStart( &MacCtx.RxWindowTimer2 );
-    CRITICAL_SECTION_END( );
+    RESTORE_PRIMASK();
 
     if( MacCtx.NodeAckRequested == true )
     {
@@ -867,91 +878,16 @@ static void PrepareRxDoneAbort( void )
     UpdateRxSlotIdleState( );
 }
 
-static void ProcessRadioRxDoneJoinAccept( uint16_t size, uint8_t *payload ) 
-{
-    
-    // Check if the received frame size is valid
-    if( size < LORAMAC_JOIN_ACCEPT_FRAME_MIN_SIZE )
-    {
-        MacCtx.McpsIndication.Status = LORAMAC_EVENT_INFO_STATUS_ERROR;
-        PrepareRxDoneAbort( );
-        return;
-    }
-    ApplyCFListParams_t applyCFList;
-    LoRaMacMessageJoinAccept_t macMsgJoinAccept;
-    macMsgJoinAccept.Buffer = payload;
-    macMsgJoinAccept.BufSize = size;
-
-    // Abort in case if the device isn't joined yet and no rejoin request is ongoing.
-    if( MacCtx.NvmCtx->NetworkActivation != ACTIVATION_TYPE_NONE )
-    {
-        MacCtx.McpsIndication.Status = LORAMAC_EVENT_INFO_STATUS_ERROR;
-        PrepareRxDoneAbort( );
-        return;
-    }
-
-    LoRaMacCryptoStatus_t macCryptoStatus = LORAMAC_CRYPTO_ERROR;
-    macCryptoStatus = LoRaMacCryptoHandleJoinAccept( JOIN_REQ, MacCtx.MacCallbacks->GetAppEui( ), &macMsgJoinAccept ); // in oss-7, no secure element inside the lorawan stack is used.
-
-    if( LORAMAC_CRYPTO_SUCCESS == macCryptoStatus )
-    {
-        // Network ID
-        MacCtx.NvmCtx->NetID = ( uint32_t ) macMsgJoinAccept.NetID[0];
-        MacCtx.NvmCtx->NetID |= ( ( uint32_t ) macMsgJoinAccept.NetID[1] << 8 );
-        MacCtx.NvmCtx->NetID |= ( ( uint32_t ) macMsgJoinAccept.NetID[2] << 16 );
-
-        // Device Address
-        MacCtx.NvmCtx->DevAddr = macMsgJoinAccept.DevAddr;
-
-        // DLSettings
-        MacCtx.NvmCtx->MacParams.Rx1DrOffset = macMsgJoinAccept.DLSettings.Bits.RX1DRoffset;
-        MacCtx.NvmCtx->MacParams.Rx2Channel.Datarate = macMsgJoinAccept.DLSettings.Bits.RX2DataRate;
-        MacCtx.NvmCtx->MacParams.RxCChannel.Datarate = macMsgJoinAccept.DLSettings.Bits.RX2DataRate;
-
-        // RxDelay
-        MacCtx.NvmCtx->MacParams.ReceiveDelay1 = macMsgJoinAccept.RxDelay;
-        if( MacCtx.NvmCtx->MacParams.ReceiveDelay1 == 0 )
-        {
-            MacCtx.NvmCtx->MacParams.ReceiveDelay1 = 1;
-        }
-        MacCtx.NvmCtx->MacParams.ReceiveDelay1 *= 1000;
-        MacCtx.NvmCtx->MacParams.ReceiveDelay2 = MacCtx.NvmCtx->MacParams.ReceiveDelay1 + 1000;
-
-        MacCtx.NvmCtx->Version.Fields.Minor = 0;
-
-        // Apply CF list
-        applyCFList.Payload = macMsgJoinAccept.CFList;
-        // Size of the regular payload is 12. Plus 1 byte MHDR and 4 bytes MIC
-        applyCFList.Size = size - 17;
-
-        RegionApplyCFList( MacCtx.NvmCtx->Region, &applyCFList );
-
-        MacCtx.NvmCtx->NetworkActivation = ACTIVATION_TYPE_OTAA;
-
-        // MLME handling
-        if( LoRaMacConfirmQueueIsCmdActive( MLME_JOIN ) == true )
-        {
-            LoRaMacConfirmQueueSetStatus( LORAMAC_EVENT_INFO_STATUS_OK, MLME_JOIN );
-        }
-    }
-    else
-    {
-        // MLME handling
-        if( LoRaMacConfirmQueueIsCmdActive( MLME_JOIN ) == true )
-        {
-            LoRaMacConfirmQueueSetStatus( LORAMAC_EVENT_INFO_STATUS_JOIN_FAIL, MLME_JOIN );
-        }
-    }    
-}
-
 static void ProcessRadioRxDone( void )
 {
     LoRaMacHeader_t macHdr;
+    ApplyCFListParams_t applyCFList;
     GetPhyParams_t getPhy;
     PhyParam_t phyParam;
     LoRaMacCryptoStatus_t macCryptoStatus = LORAMAC_CRYPTO_ERROR;
 
     LoRaMacMessageData_t macMsgData;
+    LoRaMacMessageJoinAccept_t macMsgJoinAccept;
     uint8_t *payload = RxDoneParams.Payload;
     uint16_t size = RxDoneParams.Size;
     int16_t rssi = RxDoneParams.Rssi;
@@ -1056,23 +992,23 @@ static void ProcessRadioRxDone( void )
                 PrepareRxDoneAbort( );
                 return;
             }
-            macCryptoStatus = LoRaMacCryptoHandleJoinAccept( JOIN_REQ, MacCtx.MacCallbacks->GetAppEui( ), &macMsgJoinAccept ); // in oss-7, no secure element inside the lorawan stack is used.
+            macCryptoStatus = LoRaMacCryptoHandleJoinAccept( JOIN_REQ, MacCtx.MacCallbacks->GetAppEui( ), &macMsgJoinAccept );
 
             if( LORAMAC_CRYPTO_SUCCESS != macCryptoStatus )
             {
-                macCryptoStatus = LoRaMacCryptoHandleJoinAccept( REJOIN_REQ_0, SecureElementGetJoinEui( ), &macMsgJoinAccept );
+                macCryptoStatus = LoRaMacCryptoHandleJoinAccept( REJOIN_REQ_0, MacCtx.MacCallbacks->GetAppEui( ), &macMsgJoinAccept );
                 joinType = MLME_REJOIN_0;
             }
 
             if( LORAMAC_CRYPTO_SUCCESS != macCryptoStatus )
             {
-                macCryptoStatus = LoRaMacCryptoHandleJoinAccept( REJOIN_REQ_1, SecureElementGetJoinEui( ), &macMsgJoinAccept );
+                macCryptoStatus = LoRaMacCryptoHandleJoinAccept( REJOIN_REQ_1, MacCtx.MacCallbacks->GetAppEui( ), &macMsgJoinAccept );
                 joinType = MLME_REJOIN_1;
             }
 
             if( LORAMAC_CRYPTO_SUCCESS != macCryptoStatus )
             {
-                macCryptoStatus = LoRaMacCryptoHandleJoinAccept( REJOIN_REQ_2, SecureElementGetJoinEui( ), &macMsgJoinAccept );
+                macCryptoStatus = LoRaMacCryptoHandleJoinAccept( REJOIN_REQ_2, MacCtx.MacCallbacks->GetAppEui( ), &macMsgJoinAccept );
                 joinType = MLME_REJOIN_2;
             }
 
@@ -1785,7 +1721,7 @@ static void LoRaMacHandleMcpsRequest( void )
             // Reset the state of the AckTimeout
             MacCtx.RetransmitTimeoutRetry = false;
             // Fire callback
-	        MacCtx.MacPrimitives->MacRetryTransmission(MacCtx.AckTimeoutRetriesCounter);
+            MacCtx.MacPrimitives->MacRetryTransmission(MacCtx.ChannelsNbTransCounter);
             // Sends the same frame again
             OnTxDelayedTimerEvent( NULL );
         }
@@ -2850,8 +2786,8 @@ LoRaMacStatus_t SendReJoinReq( JoinReqIdentifier_t joinReqType )
 
             MacCtx.TxMsg.Message.ReJoin1.ReJoinType = 1;
 
-            memcpy1( MacCtx.TxMsg.Message.ReJoin1.JoinEUI, SecureElementGetJoinEui( ), LORAMAC_JOIN_EUI_FIELD_SIZE );
-            memcpy1( MacCtx.TxMsg.Message.ReJoin1.DevEUI, SecureElementGetDevEui( ), LORAMAC_DEV_EUI_FIELD_SIZE );
+            memcpy1( MacCtx.TxMsg.Message.ReJoin1.JoinEUI, MacCtx.MacCallbacks->GetAppEui( ), LORAMAC_JOIN_EUI_FIELD_SIZE );
+            memcpy1( MacCtx.TxMsg.Message.ReJoin1.DevEUI, MacCtx.MacCallbacks->GetDevEui( ), LORAMAC_DEV_EUI_FIELD_SIZE );
 
             if( LORAMAC_CRYPTO_SUCCESS != LoRaMacCryptoGetRJcount( RJ_COUNT_1, &MacCtx.TxMsg.Message.ReJoin1.RJcount1 ) )
             {
@@ -2885,7 +2821,7 @@ LoRaMacStatus_t SendReJoinReq( JoinReqIdentifier_t joinReqType )
             MacCtx.TxMsg.Message.ReJoin0or2.NetID[1] = ( Nvm.MacGroup2.NetID >> 8 ) & 0xFF;
             MacCtx.TxMsg.Message.ReJoin0or2.NetID[2] = ( Nvm.MacGroup2.NetID >> 16 ) & 0xFF;
 
-            memcpy1( MacCtx.TxMsg.Message.ReJoin0or2.DevEUI, SecureElementGetDevEui( ), LORAMAC_DEV_EUI_FIELD_SIZE );
+            memcpy1( MacCtx.TxMsg.Message.ReJoin0or2.DevEUI, MacCtx.MacCallbacks->GetDevEui( ), LORAMAC_DEV_EUI_FIELD_SIZE );
 
             if( LORAMAC_CRYPTO_SUCCESS != LoRaMacCryptoGetRJcount( RJ_COUNT_0, &MacCtx.TxMsg.Message.ReJoin0or2.RJcount0 ) )
             {
@@ -2905,7 +2841,7 @@ LoRaMacStatus_t SendReJoinReq( JoinReqIdentifier_t joinReqType )
             macHdr.Bits.MType = FRAME_TYPE_JOIN_REQ;
             MacCtx.TxMsg.Message.JoinReq.MHDR.Value = macHdr.Value;
 
-            memcpy1( MacCtx.TxMsg.Message.JoinReq.JoinEUI, MacCtx.MacCallbacks->GetAppEui( ), LORAMAC_JOIN_EUI_FIELD_SIZE ); // in oss-7, no secure element inside the lorawan stack is used.
+            memcpy1( MacCtx.TxMsg.Message.JoinReq.JoinEUI, MacCtx.MacCallbacks->GetAppEui( ), LORAMAC_JOIN_EUI_FIELD_SIZE ); // in Sub-IoT-Stack, no secure element inside the lorawan stack is used.
             memcpy1( MacCtx.TxMsg.Message.JoinReq.DevEUI, MacCtx.MacCallbacks->GetDevEui( ), LORAMAC_DEV_EUI_FIELD_SIZE );
 
             allowDelayedTx = false;
@@ -3132,6 +3068,8 @@ static LoRaMacStatus_t SecureFrame( uint8_t txDr, uint8_t txCh )
     {
         case LORAMAC_MSG_TYPE_JOIN_REQUEST:
             macCryptoStatus = LoRaMacCryptoPrepareJoinRequest( &MacCtx.TxMsg.Message.JoinReq );
+            MacCtx.MlmeConfirm.DevNonce = Nvm.Crypto.DevNonce;
+            
             if( LORAMAC_CRYPTO_SUCCESS != macCryptoStatus )
             {
                 return LORAMAC_STATUS_CRYPTO_ERROR;
@@ -3823,8 +3761,7 @@ static uint8_t IsRequestPending( void )
     return 0;
 }
 
-
-LoRaMacStatus_t LoRaMacInitialization( LoRaMacPrimitives_t* primitives, LoRaMacCallback_t* callbacks, LoRaMacRegion_t region )
+LoRaMacStatus_t LoRaMacInitialization( LoRaMacPrimitives_t* primitives, LoRaMacCallback_t* callbacks, LoRaMacRegion_t region, uint16_t devnonce )
 {
     GetPhyParams_t getPhy;
     PhyParam_t phyParam;
@@ -4003,7 +3940,7 @@ LoRaMacStatus_t LoRaMacInitialization( LoRaMacPrimitives_t* primitives, LoRaMacC
     }
 
     // Initialize Crypto module
-    if( LoRaMacCryptoInit( &Nvm.Crypto ) != LORAMAC_CRYPTO_SUCCESS )
+    if( LoRaMacCryptoInit( &Nvm.Crypto, devnonce ) != LORAMAC_CRYPTO_SUCCESS )
     {
         return LORAMAC_STATUS_CRYPTO_ERROR;
     }
@@ -4419,12 +4356,20 @@ LoRaMacStatus_t LoRaMacMibSetRequestConfirm( MibRequestConfirm_t* mibSet )
         }
         case MIB_DEV_EUI:
         {
-            status = LORAMAC_STATUS_PARAMETER_INVALID; // in oss-7, no secure element inside the lorawan stack is used, so should be set in upper layer
+            status = LORAMAC_STATUS_PARAMETER_INVALID; // Sub-IoT-Stack, no secure element inside the lorawan stack is used, so should be set in upper layer
             break;
         }
         case MIB_JOIN_EUI:
         {
-            status = LORAMAC_STATUS_PARAMETER_INVALID; // in oss-7, no secure element inside the lorawan stack is used, so should be set in upper layer
+            status = LORAMAC_STATUS_PARAMETER_INVALID; // Sub-IoT-Stack, no secure element inside the lorawan stack is used, so should be set in upper layer
+            break;
+        }
+        case MIB_SE_PIN:
+        {
+            if( SecureElementSetPin( mibSet->Param.SePin ) != SECURE_ELEMENT_SUCCESS )
+            {
+                status = LORAMAC_STATUS_PARAMETER_INVALID;
+            }
             break;
         }
         case MIB_ADR:
@@ -5675,7 +5620,7 @@ LoRaMacStatus_t LoRaMacMcpsRequest( McpsReq_t* mcpsRequest )
     mcpsRequest->ReqReturn.DutyCycleWaitTime = MacCtx.DutyCycleWaitTime;
 
     return status;
-}
+}   
 
 static bool ConvertRejoinCycleTime( uint32_t rejoinCycleTime, uint32_t* timeInMiliSec )
 {
@@ -5781,7 +5726,7 @@ LoRaMacStatus_t LoRaMacDeInitialization( void )
         sched_cancel_task((task_t)&MacCtx.TxDelayedTimer.Callback);
         sched_cancel_task((task_t)&MacCtx.RxWindowTimer1.Callback);
         sched_cancel_task((task_t)&MacCtx.RxWindowTimer2.Callback);
-        sched_cancel_task((task_t)&MacCtx.AckTimeoutTimer.Callback);
+        sched_cancel_task((task_t)&MacCtx.RetransmitTimeoutTimer.Callback);
         sched_cancel_task(&LoRaMacProcess);
 
         // Return success
@@ -5791,6 +5736,12 @@ LoRaMacStatus_t LoRaMacDeInitialization( void )
     {
         return LORAMAC_STATUS_BUSY;
     }*/
+}
+
+uint16_t lorawanGetDutyCycleWaitTime()
+{
+    uint32_t elapsedTime = TimerGetElapsedTime(dutyCycleWaitStartTime);
+    return (dutyCycleWaitTime != 0 && dutyCycleWaitTime > elapsedTime) ? (dutyCycleWaitTime - elapsedTime)/1000 : 0;
 }
 
 void LoRaMacReset( void )
@@ -5809,10 +5760,4 @@ void LoRaMacReset( void )
 
     // Inform application layer
     OnMacProcessNotify( );
-}
-
-uint16_t lorawanGetDutyCycleWaitTime()
-{
-    uint32_t elapsedTime = TimerGetElapsedTime(dutyCycleWaitStartTime);
-    return (dutyCycleWaitTime != 0 && dutyCycleWaitTime > elapsedTime) ? (dutyCycleWaitTime - elapsedTime)/1000 : 0;
 }

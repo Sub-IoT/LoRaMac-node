@@ -548,7 +548,7 @@ bool RegionEU433TxConfig( TxConfigParams_t* txConfig, int8_t* txPower, TimerTime
     // Setup maximum payload lenght of the radio driver
     Radio.SetMaxPayloadLength( modem, txConfig->PktLen );
 
-    DPRINT( "TX on freq %d Hz at DR %d\n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate );
+    DPRINT( "TX on freq %d Hz at DR %d\n\r", RegionNvmGroup2->Channels[txConfig->Channel].Frequency, txConfig->Datarate );
 
     *txPower = txPowerLimited;
     return true;

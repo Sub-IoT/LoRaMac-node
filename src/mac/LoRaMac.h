@@ -1363,6 +1363,10 @@ typedef struct sMlmeConfirm
      * The channel of the next beacon
      */
     uint8_t BeaconTimingChannel;
+    /*!
+     * The devnonce used in the last join request
+     */
+    uint8_t DevNonce;
 }MlmeConfirm_t;
 
 /*!
@@ -2619,7 +2623,7 @@ typedef struct sLoRaMacCallback
      *\warning  Runs in a IRQ context. Should only change variables state.
      */
     void ( *MacProcessNotify )( void );
-    //in oss-7, the LoRaMac-node secure element is not used, the DevEui and AppEui are stored further up the stack instead.
+    //in Sub-IoT-Stack, the LoRaMac-node secure element is not used, the DevEui and AppEui are stored further up the stack instead.
     /*!
      * \brief   Gets the DevEui from the upper layer of the stack
      * 
@@ -2662,7 +2666,7 @@ static const uint8_t LoRaMacMaxEirpTable[] = { 8, 10, 12, 13, 14, 16, 18, 20, 21
  *          \ref LORAMAC_STATUS_PARAMETER_INVALID,
  *          \ref LORAMAC_STATUS_REGION_NOT_SUPPORTED.
  */
-LoRaMacStatus_t LoRaMacInitialization( LoRaMacPrimitives_t* primitives, LoRaMacCallback_t* callbacks, LoRaMacRegion_t region );
+LoRaMacStatus_t LoRaMacInitialization( LoRaMacPrimitives_t* primitives, LoRaMacCallback_t* callbacks, LoRaMacRegion_t region, uint16_t devnonce );
 
 /*!
  * \brief   Starts LoRaMAC layer
@@ -2755,7 +2759,7 @@ LoRaMacStatus_t LoRaMacChannelAdd( uint8_t id, ChannelParams_t params );
  */
 LoRaMacStatus_t LoRaMacChannelRemove( uint8_t id );
 
-#ifdef MODULE_LORAWAN_MULTICAST_ON // in oss-7, lorawan multicast functionality is made optional in order to save space.
+#ifdef MODULE_LORAWAN_MULTICAST_ON // in Sub-IoT-Stack, lorawan multicast functionality is made optional in order to save space.
 /*!
  * \brief   LoRaMAC multicast channel setup service
  *
@@ -2951,13 +2955,6 @@ LoRaMacStatus_t LoRaMacMcpsRequest( McpsReq_t* mcpsRequest );
  */
 LoRaMacStatus_t LoRaMacDeInitialization( void );
 
-/**
- * @brief Gets the current delay caused by the duty cycle restriction
- * This will update automatically with each function call
- * @return delay in seconds
- */
-uint16_t lorawanGetDutyCycleWaitTime();
-
 /*!
  * \brief   Resets the internal state machine.
  *
@@ -2966,6 +2963,13 @@ uint16_t lorawanGetDutyCycleWaitTime();
 void LoRaMacReset( void );
 
 /*! \} defgroup LORAMAC */
+
+/**
+ * @brief Gets the current delay caused by the duty cycle restriction
+ * This will update automatically with each function call
+ * @return delay in seconds
+ */
+uint16_t lorawanGetDutyCycleWaitTime();
 
 #ifdef __cplusplus
 }

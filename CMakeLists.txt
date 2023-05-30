@@ -1,21 +1,21 @@
-# 
-# OSS-7 - An opensource implementation of the DASH7 Alliance Protocol for ultra
-# lowpower wireless sensor communication
-#
-# Copyright 2017 University of Antwerp
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
+#[[
+Copyright (c) 2015-2021 University of Antwerp, Aloxy NV.
+
+This file is part of Sub-IoT.
+See https://github.com/Sub-IoT/Sub-IoT-Stack for further info.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+]]
 
 #Module specific parameters and options can be defined using
 #MODULE_OPTION and MODULE_PARAMETER
@@ -64,6 +64,9 @@ MODULE_OPTION(${MODULE_PREFIX}_MULTICAST_ON "Enables multicast mode and includes
 
 MODULE_OPTION(LORAMAC_CLASSB_ENABLED "Enables Class B mode and includes required functions at compile time" FALSE)
 
+MODULE_PARAM(${MODULE_PREFIX}_SECURE_ELEMENT "SOFT_SE" STRING "Secure element types. Default secure element is SOFT_SE")
+SET_PROPERTY(CACHE ${MODULE_PREFIX}_SECURE_ELEMENT PROPERTY STRINGS "SOFT_SE;LR1110_SE;ATECC608A_TNGLORA_SE")
+
 MODULE_HEADER_DEFINE(
     BOOL ${MODULE_PREFIX}_LOG_ENABLED
     ID ${MODULE_PREFIX}_MINIMUM_DATARATE
@@ -73,6 +76,7 @@ MODULE_HEADER_DEFINE(
     BOOL ${MODULE_PREFIX}_MULTICAST_ON
     BOOL LORAMAC_CLASSB_ENABLED
     ID ${ACTIVE_R}
+    ID ${${MODULE_PREFIX}_SECURE_ELEMENT}
 )
 
 #Generate the 'module_defs.h'
@@ -135,6 +139,7 @@ ADD_DEFINITIONS("-DUSE_B_L072Z_LRWAN1" "-DSTM32L072xx" "-DREGION_${${MODULE_PREF
 GET_PROPERTY(__global_include_dirs GLOBAL PROPERTY GLOBAL_INCLUDE_DIRECTORIES)
 target_include_directories(lorawan PUBLIC
     src/mac
+    src/mac/region
     src/system
     src/boards
     src/peripherals/soft-se

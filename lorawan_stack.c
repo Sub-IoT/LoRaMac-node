@@ -1,14 +1,14 @@
-/* * OSS-7 - An opensource implementation of the DASH7 Alliance Protocol for ultra
- * lowpower wireless sensor communication
+/*
+ * Copyright (c) 2015-2021 University of Antwerp, Aloxy NV.
  *
- * Copyright 2017 University of Antwerp
- * Copyright (c) 2017 STMicroelectronics International N.V. (see below)
+ * This file is part of Sub-IoT.
+ * See https://github.com/Sub-IoT/Sub-IoT-Stack for further info.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -129,6 +129,14 @@ static uint8_t joinRequestTrials = 0;
 
 static float antenna_gain_f = 0.0;
 
+static uint8_t* lorawan_get_deveui( void );
+static uint8_t* lorawan_get_appeui( void );
+
+static void lorawan_set_antenna_gain(uint8_t file_id);
+
+static uint16_t lorawan_read_devnonce( void );
+static void lorawan_write_devnonce(uint16_t devnonce);
+
 /**
  * @brief Called everytime a LoRaWAN retransmission is executed.
  * This will be executed when joining or when nacks are received when an ack was requested
@@ -162,6 +170,7 @@ static void run_fsm()
 
           MlmeReq_t mlmeReq;
           mlmeReq.Type = MLME_JOIN;
+          mlmeReq.Req.Join.NetworkActivation = ACTIVATION_TYPE_OTAA;
           mlmeReq.Req.Join.Datarate = datarate; 
           LoRaMacMlmeRequest(&mlmeReq);
       } else {
@@ -240,7 +249,7 @@ static void mcps_confirm(McpsConfirm_t *McpsConfirm)
   }
   else
     status = LORAWAN_STACK_ERROR_UNKNOWN;
-  tx_callback(status, McpsConfirm->NbRetries);
+  tx_callback(status, McpsConfirm->NbTrans);
   lorawan_transmitting = false;
 }
 
@@ -295,6 +304,7 @@ static void mlme_confirm(MlmeConfirm_t *mlmeConfirm)
       else if (mlmeConfirm->Status == LORAMAC_EVENT_INFO_STATUS_RX2_TIMEOUT) 
       {
         DPRINT("join failed because of RX2 timeout, going to attempt to retry");
+        lorawan_write_devnonce(mlmeConfirm->DevNonce);
         sched_post_task(&run_fsm); 
       }
       else
@@ -424,6 +434,51 @@ static void lorawan_set_antenna_gain(uint8_t file_id)
   mibReq.Type = MIB_ANTENNA_GAIN;
   mibReq.Param.AntennaGain = antenna_gain_f;
   LoRaMacMibSetRequestConfirm( &mibReq );
+}
+
+/**
+ * @brief devnonce, which is used in the join-request, should increment every time. Before the first join-request after boot, read existing devnonce.
+ */
+static uint16_t lorawan_read_devnonce( void )
+{
+    uint16_t devnonce;
+    uint32_t length = USER_FILE_LORAWAN_DEVNONCE_SIZE;
+    error_t err = d7ap_fs_read_file(USER_FILE_LORAWAN_DEVNONCE_FILE_ID, 0, (uint8_t*) &devnonce, &length, ROOT_AUTH);
+    
+    if(err == -ENOENT) {
+        // file does not exist yet (older filesystem version), create it
+        d7ap_fs_file_header_t file_header = {
+        .file_permissions = (file_permission_t){ },
+        .file_properties.storage_class = FS_STORAGE_PERMANENT,
+        .length                        = USER_FILE_LORAWAN_DEVNONCE_SIZE,
+        .allocated_length              = USER_FILE_LORAWAN_DEVNONCE_SIZE
+        };
+
+        // initialize file on fs
+        error_t ret = d7ap_fs_init_file(USER_FILE_LORAWAN_DEVNONCE_FILE_ID, &file_header, (uint8_t*)&devnonce);
+
+        if(ret != SUCCESS) {
+            log_print_error_string("Creation of the devnonce file failed, error status: %u", err);
+        }
+    } else if(err != SUCCESS) {
+        log_print_error_string("Reading of the devnonce failed, error status: %u", err);
+    }
+    
+    DPRINT("Reading devnonce: %u", devnonce);
+    return devnonce;
+}
+
+/** 
+ * @brief Save the used devnonce before every join attempt to prevent reuse.
+ */
+static void lorawan_write_devnonce(uint16_t devnonce)
+{
+    DPRINT("Writing devnonce: %u", devnonce);
+    error_t err = d7ap_fs_write_file(USER_FILE_LORAWAN_DEVNONCE_FILE_ID, 0, (uint8_t*) &devnonce, USER_FILE_LORAWAN_DEVNONCE_SIZE, ROOT_AUTH);
+
+    if(err != SUCCESS) {
+        log_print_error_string("Writing of the devnonce failed, error status: %u", err);
+    }
 }
 
 /**
@@ -580,7 +635,7 @@ error_t lorawan_stack_init_otaa() {
   loraMacCallbacks.GetDevEui = &lorawan_get_deveui;
   loraMacCallbacks.GetAppEui = &lorawan_get_appeui;
 
-  loraMacStatus = LoRaMacInitialization(&loraMacPrimitives, &loraMacCallbacks, lorawan_get_region());
+  loraMacStatus = LoRaMacInitialization(&loraMacPrimitives, &loraMacCallbacks, lorawan_get_region(), lorawan_read_devnonce());
   if(loraMacStatus == LORAMAC_STATUS_OK) {
     DPRINT("init OK");
   } else {
@@ -725,6 +780,11 @@ lorawan_stack_status_t lorawan_stack_send(uint8_t* payload, uint8_t length, uint
     mcpsReq.Req.Unconfirmed.fBuffer = app_data.Buff;
     mcpsReq.Req.Unconfirmed.fBufferSize = app_data.BuffSize;
     mcpsReq.Req.Unconfirmed.Datarate = datarate;
+
+    MibRequestConfirm_t mibReq;
+    mibReq.Type = MIB_CHANNELS_NB_TRANS;
+    mibReq.Param.ChannelsNbTrans = 1;
+    LoRaMacMibSetRequestConfirm( &mibReq ); 
   }
   else
   {
@@ -732,8 +792,12 @@ lorawan_stack_status_t lorawan_stack_send(uint8_t* payload, uint8_t length, uint
     mcpsReq.Req.Confirmed.fPort = app_data.Port;
     mcpsReq.Req.Confirmed.fBuffer = app_data.Buff;
     mcpsReq.Req.Confirmed.fBufferSize = app_data.BuffSize;
-    mcpsReq.Req.Confirmed.NbTrials = 8;
     mcpsReq.Req.Confirmed.Datarate = datarate;
+
+    MibRequestConfirm_t mibReq;
+    mibReq.Type = MIB_CHANNELS_NB_TRANS;
+    mibReq.Param.ChannelsNbTrans = 8;
+    LoRaMacMibSetRequestConfirm( &mibReq ); 
   }
 
   LoRaMacStatus_t status = LoRaMacMcpsRequest(&mcpsReq);

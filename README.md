@@ -1,22 +1,22 @@
-# LoRaMAC-node integration into oss-7
+# LoRaMAC-node integration into Sub-IoT-Stack
 
-This repo modifies LoRaMac-node in order to integrate it into oss-7, namely by:
+This repo modifies LoRaMac-node in order to integrate it into Sub-IoT-Stack, namely by:
 
-- Changing timers and scheduling to link into oss-7 instead.
+- Changing timers and scheduling to link into Sub-IoT-Stack instead.
 
 - Adding additional callbacks to the MAC and radio implementation for use in the LoRaWAN ALP interface.
 
-- Removes provided version of AES, and instead uses available version already in oss-7.
+- Removes provided version of AES, and instead uses available version already in Sub-IoT-Stack.
 
-- Removes DevEui, JoinEui, and Pin from emulated secure element, and instead gets the LoRaWAN EUIs from the d7 file system in oss-7.
+- Removes DevEui, JoinEui, and Pin from emulated secure element, and instead gets the LoRaWAN EUIs from the d7 file system in Sub-IoT-Stack.
 
 - In order to save space in RAM, reformats multicast functionality to be a selectable option inside LoRaMac-node, toggleable from CMakeLists.
 
-The currently integrated version is Release 4.4.5.
+The currently integrated version is Release 4.7.0.
 
 
 
-## LoRaWAN end-device stack implementation and example projects
+# LoRaWAN end-device stack implementation and example projects
 
       ______                              _
      / _____)             _              | |
