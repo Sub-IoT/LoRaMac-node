@@ -441,12 +441,13 @@ static void lorawan_set_antenna_gain(uint8_t file_id)
  */
 static uint16_t lorawan_read_devnonce( void )
 {
-    uint16_t devnonce;
+    uint16_t devnonce = 0;
     uint32_t length = USER_FILE_LORAWAN_DEVNONCE_SIZE;
     error_t err = d7ap_fs_read_file(USER_FILE_LORAWAN_DEVNONCE_FILE_ID, 0, (uint8_t*) &devnonce, &length, ROOT_AUTH);
     
     if(err == -ENOENT) {
-        // file does not exist yet (older filesystem version), create it
+        // file does not exist yet, create it
+        DPRINT("Creating devnonce file.");
         d7ap_fs_file_header_t file_header = {
         .file_permissions = (file_permission_t){ },
         .file_properties.storage_class = FS_STORAGE_PERMANENT,

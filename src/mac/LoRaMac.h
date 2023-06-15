@@ -1366,7 +1366,7 @@ typedef struct sMlmeConfirm
     /*!
      * The devnonce used in the last join request
      */
-    uint8_t DevNonce;
+    uint16_t DevNonce;
 }MlmeConfirm_t;
 
 /*!
