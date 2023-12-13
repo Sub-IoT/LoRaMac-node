@@ -263,6 +263,10 @@ static void mcps_indication(McpsIndication_t *mcpsIndication)
   if(mcpsIndication->Status != LORAMAC_EVENT_INFO_STATUS_OK)
   {
     DPRINT("mcps_indication status: %i", mcpsIndication->Status);
+    if(join_state == STATE_JOINING) {
+        DPRINT("mcpsIndication fired occurred while join procedure ongoing, retry a join");
+        sched_post_task(&run_fsm);
+    }
     return;
   }
   if( mcpsIndication->RxData == true )
