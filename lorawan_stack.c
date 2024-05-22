@@ -163,7 +163,17 @@ static void run_fsm()
           MlmeReq_t mlmeReq;
           mlmeReq.Type = MLME_JOIN;
           mlmeReq.Req.Join.Datarate = datarate; 
-          LoRaMacMlmeRequest(&mlmeReq);
+          LoRaMacStatus_t status = LoRaMacMlmeRequest(&mlmeReq);
+          if(status != LORAMAC_STATUS_OK) {
+            if(status == LORAMAC_STATUS_DUTYCYCLE_RESTRICTED) {
+              DPRINT("Duty cycle limit hit during join procedure; return join failed");
+            } else {
+              log_print_error_string("Unexpected error: %u, return failure. Cancel join procedure.", status);
+            }
+            join_state = STATE_JOIN_FAILED;
+            if(stack_status_callback)
+              stack_status_callback(LORAWAN_STACK_JOIN_FAILED, JOINREQ_NBTRIALS);
+          } 
       } else {
           DPRINT("Error while trying to join: NBTrial Joins failed in succession");
           join_state = STATE_JOIN_FAILED;
@@ -216,6 +226,8 @@ uint16_t lorawan_get_duty_cycle_delay()
 /**
  * @brief Called from LoRaWAN stack and calls registered callback. 
  * This will be called everytime a message is delayed because of duty cycle limitations.
+ * Join-requests that cannot be sent because of the duty cycle do not cause this to fire;
+ * instead the MlmeRequest returns DUTYCYCLE_RESTRICTED and the Join procedure returns failed.
  * @param delay
  * @param attempt: the attempt number. Indicated how many NACKS have occured
  */
