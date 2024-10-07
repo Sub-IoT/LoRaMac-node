@@ -541,6 +541,9 @@ static LoRaMacRegion_t lorawan_get_region()
         return LORAMAC_REGION_US915;
       }
       case MODEM_REGION_CN470:
+      {
+        return LORAMAC_REGION_CN470;
+      }
       case MODEM_REGION_CN779:
       case MODEM_REGION_EU433:
       case MODEM_REGION_KR920:

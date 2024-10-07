@@ -52,7 +52,7 @@ extern "C"
 /*!
  * Minimal datarate that can be used by the node
  */
-#define CN470_TX_MIN_DATARATE                       DR_0
+#define CN470_TX_MIN_DATARATE                       MODULE_LORAWAN_MINIMUM_DATARATE
 
 /*!
  * Maximal datarate that can be used by the node
@@ -62,7 +62,7 @@ extern "C"
 /*!
  * Minimal datarate that can be used by the node
  */
-#define CN470_RX_MIN_DATARATE                       DR_0
+#define CN470_RX_MIN_DATARATE                       MODULE_LORAWAN_MINIMUM_DATARATE
 
 /*!
  * Maximal datarate that can be used by the node
@@ -72,7 +72,7 @@ extern "C"
 /*!
  * Default datarate used by the node
  */
-#define CN470_DEFAULT_DATARATE                      DR_0
+#define CN470_DEFAULT_DATARATE                      MODULE_LORAWAN_MINIMUM_DATARATE
 
 /*!
  * Minimal Rx1 receive datarate offset

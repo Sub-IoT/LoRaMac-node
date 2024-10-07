@@ -32,7 +32,7 @@
 
 #include "RegionCommon.h"
 #include "RegionCN470.h"
-#include "RegionBaseUS.h"
+//#include "RegionBaseUS.h" //moved only function from this to a duplicate function here to minimise memory usage
 
 // Definitions
 #define CHANNELS_MASK_SIZE              6
@@ -64,6 +64,13 @@ typedef struct sRegionCN470NvmCtx
  * Non-volatile module context.
  */
 static RegionCN470NvmCtx_t NvmCtx;
+
+uint32_t RegionBaseUSCalcDownlinkFrequency( uint8_t channel, uint32_t frequency,
+                                            uint32_t stepwidth )
+{
+    // Calculate the frequency
+    return frequency + ( channel * stepwidth );
+}
 
 // Static functions
 static bool VerifyRfFreq( uint32_t freq )
