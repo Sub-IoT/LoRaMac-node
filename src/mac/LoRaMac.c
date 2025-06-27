@@ -999,6 +999,8 @@ static void ProcessRadioRxDoneJoinAccept( uint16_t size, uint8_t *payload )
 
         RegionApplyCFList( MacCtx.NvmCtx->Region, &applyCFList );
 
+        MacCtx.MacPrimitives->MacSubbandChanged(RegionGetSubband(MacCtx.NvmCtx->Region));
+
         MacCtx.NvmCtx->NetworkActivation = ACTIVATION_TYPE_OTAA;
 
         // MLME handling
@@ -2025,6 +2027,8 @@ static void ProcessMacCommands( uint8_t *payload, uint8_t macIndex, uint8_t comm
                         EventMacNvmCtxChanged( );
                         EventRegionNvmCtxChanged( );
                     }
+
+                    MacCtx.MacPrimitives->MacSubbandChanged(RegionGetSubband(MacCtx.NvmCtx->Region));
 
                     // Add the answers to the buffer
                     for( uint8_t i = 0; i < ( linkAdrNbBytesParsed / 5 ); i++ )
@@ -3285,8 +3289,9 @@ LoRaMacStatus_t LoRaMacInitialization( LoRaMacPrimitives_t* primitives, LoRaMacC
         ( primitives->MacMlmeConfirm == NULL ) ||
         ( primitives->MacMlmeIndication == NULL ) || 
         ( primitives->MacDutyDelay == NULL ) ||
-	( primitives->MacRetryTransmission == NULL))
-        
+	    ( primitives->MacRetryTransmission == NULL) ||
+        ( primitives->MacSubbandChanged == NULL)
+    )
     {
         return LORAMAC_STATUS_PARAMETER_INVALID;
     }
@@ -4600,6 +4605,8 @@ LoRaMacStatus_t LoRaMacMlmeRequest( MlmeReq_t* mlmeRequest )
             }
 
             ResetMacParameters( );
+
+            RegionSetSubband(MacCtx.NvmCtx->Region, mlmeRequest->subband);
 
             MacCtx.NvmCtx->MacParams.ChannelsDatarate = RegionAlternateDr( MacCtx.NvmCtx->Region, mlmeRequest->Req.Join.Datarate, ALTERNATE_DR );
 

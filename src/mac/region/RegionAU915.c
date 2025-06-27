@@ -1007,3 +1007,92 @@ void RegionAU915RxBeaconSetup( RxBeaconSetup_t* rxBeaconSetup, uint8_t* outDr )
     // Store downlink datarate
     *outDr = AU915_BEACON_CHANNEL_DR;
 }
+
+uint8_t RegionAU915GetSubband() {
+    uint8_t bitMask = 1;
+    uint8_t foundCount = 0;
+    uint8_t subband = 0;
+
+    for( uint8_t i = 0; i <= 7; i++ )
+    {
+        uint16_t comparator = 0xFF00;
+        if( (i % 2)  == 0) 
+        {
+            comparator = 0x00FF;
+        }
+        if(NvmCtx.ChannelsMask[i/2] == comparator ) 
+        {
+            if(NvmCtx.ChannelsMask[4] == ( bitMask << i )) //8 LSBs of [4] contain the 500kHz channels  
+            {
+                subband = i+1; //lowest subband is FSB1
+                foundCount++;
+            }
+        }    
+    }
+    
+    if(foundCount > 1) {
+        DPRINT("Multiple subbands currently set, so do not assume on which one to join");
+        return 0; // device can use multiple subbands, so do not make assumptions about which one on joining
+    } else {
+        if(subband == 0) {
+            DPRINT("No set subband found");
+        } else {
+            DPRINT("Subband saved: %u", subband);
+        }
+        return subband; 
+    }
+}
+
+LoRaMacStatus_t RegionAU915SetSubband( uint8_t subband ) {
+    if(subband == 0 || subband > 8) 
+    {
+        DPRINT("Not setting any particular subband before the join");
+        return LORAMAC_STATUS_OK;
+    }
+    DPRINT("Set subband to be: %u", subband);
+    subband--; //lowest subband is FSB1, not FSB0
+
+    uint8_t bitMask = 1;
+
+    for( uint8_t i = 0; i < 8; i++ )
+    {
+        if( i == subband )
+        {
+            if( ( i % 2 ) == 0 )
+            {
+                // Enable a bank of 8 125kHz channels, 8 LSBs
+                NvmCtx.ChannelsMask[i/2] |= 0x00FF;
+                // Enable the corresponding 500kHz channel
+                NvmCtx.ChannelsMask[4] |= ( bitMask << i );
+            }
+            else
+            {
+                // Enable a bank of 8 125kHz channels, 8 MSBs
+                NvmCtx.ChannelsMask[i/2] |= 0xFF00;
+                // Enable the corresponding 500kHz channel
+                NvmCtx.ChannelsMask[4] |= ( bitMask << i );
+            }
+        }
+        else
+        {
+            if( ( i % 2 ) == 0 )
+            {
+                // Disable a bank of 8 125kHz channels, 8 LSBs
+                NvmCtx.ChannelsMask[i/2] &= 0xFF00;
+                // Disable the corresponding 500kHz channel
+                NvmCtx.ChannelsMask[4] &= ~( bitMask << i );
+            }
+            else
+            {
+                // Disable a bank of 8 125kHz channels, 8 MSBs
+                NvmCtx.ChannelsMask[i/2] &= 0x00FF;
+                // Disable the corresponding 500kHz channel
+                NvmCtx.ChannelsMask[4] &= ~( bitMask << i );
+            }
+        }
+    }
+
+    RegionCommonChanMaskCopy( NvmCtx.ChannelsMaskRemaining, NvmCtx.ChannelsMask, CHANNELS_MASK_SIZE );
+    
+    return LORAMAC_STATUS_OK;
+}

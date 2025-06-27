@@ -452,6 +452,22 @@ uint8_t RegionUS915ApplyDrOffset( uint8_t downlinkDwellTime, int8_t dr, int8_t d
  */
 void RegionUS915RxBeaconSetup( RxBeaconSetup_t* rxBeaconSetup, uint8_t* outDr );
 
+/*!
+ * \brief For Regions with subbands containing differing join frequencies, returns the currently set subband (if any) 
+ *
+ * \retval Currently set subband
+ */ 
+uint8_t RegionUS915GetSubband();
+
+/*!
+ * \brief For Regions with subbands containing differing join frequencies, set the subband
+ *
+ * \param [IN] subband The subband (FSB) to be set
+ * 
+ * \retval Status of the operation
+ */
+LoRaMacStatus_t RegionUS915SetSubband(uint8_t subband);
+
 /*! \} defgroup REGIONUS915 */
 
 #ifdef __cplusplus

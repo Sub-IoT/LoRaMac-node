@@ -65,19 +65,18 @@
  ******************************************************************************
  */
 
-
 #include "lorawan_stack.h"
-#include "hw.h"
 #include "LoRaMac.h"
 #include "LoRaMacTest.h"
-#include "debug.h"
-#include "scheduler.h"
 #include "MODULE_LORAWAN_defs.h"
 #include "d7ap_fs.h"
+#include "debug.h"
 #include "errors.h"
+#include "hw.h"
 #include "modem_region.h"
+#include "scheduler.h"
 
-#if defined(MODULE_LORAWAN_LOG_ENABLED) 
+#if defined(MODULE_LORAWAN_LOG_ENABLED)
 #define DPRINT(...) log_print_stack_string(LOG_STACK_ALP, __VA_ARGS__)
 #define DPRINT_DATA(p, n) log_print_data(p, n)
 #else
@@ -86,38 +85,34 @@
 #endif
 
 // TODO configurable
-#define LORAWAN_PUBLIC_NETWORK_ENABLED              1 // TODO configurable?
-#define LORAWAN_CLASS                               CLASS_A // TODO configurable?
-#define JOINREQ_NBTRIALS                            48 // (>=48 according to spec)
-#define LORAWAN_APP_DATA_BUFF_SIZE                  222 // TODO = max?
+#define LORAWAN_PUBLIC_NETWORK_ENABLED 1 // TODO configurable?
+#define LORAWAN_CLASS CLASS_A // TODO configurable?
+#define JOINREQ_NBTRIALS_LONG 48 // (>=48 according to spec)
+#define JOINREQ_NBTRIALS_SHORT 3
+#define LORAWAN_APP_DATA_BUFF_SIZE 222 // TODO = max?
 
-const modem_region_t region = MODULE_LORAWAN_REGION; //TODO: make AS923_x configurable
+#define SHORT_JOIN_ATTEMPTS_LIMIT 3
+const modem_region_t region = MODULE_LORAWAN_REGION; // TODO: make AS923_x configurable
 
-typedef enum
-{
-  STATE_NOT_JOINED,
-  STATE_JOINED,
-  STATE_JOIN_FAILED,
-  STATE_JOINING
-} join_state_t;
+typedef enum { STATE_NOT_JOINED, STATE_JOINED, STATE_JOIN_FAILED, STATE_JOINING } join_state_t;
 
 static join_state_t join_state = STATE_NOT_JOINED;
 static LoRaMacPrimitives_t loraMacPrimitives;
 static LoRaMacCallback_t loraMacCallbacks;
 static LoRaMacStatus_t loraMacStatus;
-static uint8_t devEui[8] = { 0 };     //used for OTAA
-static uint8_t appEui[8] = { 0 };     //used for OTAA
-static uint8_t appKey[16] = { 0 };    
+static uint8_t devEui[8] = { 0 }; // used for OTAA
+static uint8_t appEui[8] = { 0 }; // used for OTAA
+static uint8_t appKey[16] = { 0 };
 
 bool adr_enabled = false;
-uint8_t datarate = 0; 
+uint8_t datarate = 0;
 
 static bool use_confirmed_tx = false;
 
 static uint8_t payload_data_buffer[LORAWAN_APP_DATA_BUFF_SIZE];
-static lorawan_AppData_t app_data = { payload_data_buffer, 0 ,0 };
+static lorawan_AppData_t app_data = { payload_data_buffer, 0, 0 };
 
-static lorawan_rx_callback_t rx_callback = NULL; //called when transmitting is done
+static lorawan_rx_callback_t rx_callback = NULL; // called when transmitting is done
 static lorawan_tx_completed_callback_t tx_callback = NULL;
 static lorawan_status_callback_t stack_status_callback = NULL;
 
@@ -136,8 +131,63 @@ static float antenna_gain_f = 0.0;
  */
 static void network_retry_transmission(uint8_t attempt)
 {
-  if(stack_status_callback != NULL)
-    stack_status_callback(LORAWAN_STACK_RETRY_TRANSMISSION, attempt);
+    if (stack_status_callback != NULL)
+        stack_status_callback(LORAWAN_STACK_RETRY_TRANSMISSION, attempt);
+}
+
+static void subband_changed(uint8_t new_subband)
+{
+    int res = d7ap_fs_write_file(USER_FILE_LORAWAN_JOINTYPE_FILE_ID, 1, &new_subband, 1, ROOT_AUTH);
+    if (res != SUCCESS) {
+        log_print_error_string(
+            "failed to write subband to USER_FILE_LORAWAN_JOINTYPE_FILE_ID file, err code: %u.", res);
+    }
+}
+
+/**
+ * @brief sets the DR to be used for the next join-request during a long join procedure
+ * For EU868, IN865 and CN470: any datarate can be used so the passed value gets used by the stack
+ * For AS915, US915 and AS923: explicite DRs must be used so the values in these functions get safely ignored.
+ */
+uint8_t JoinAlternateDrLong(uint8_t joinRequestCounter)
+{
+    uint8_t dr = 0;
+
+    if ((joinRequestCounter % 48) == 0) {
+        dr = DR_0;
+    } else if ((joinRequestCounter % 32) == 0) {
+        dr = DR_1;
+    } else if ((joinRequestCounter % 24) == 0) {
+        dr = DR_2;
+    } else if ((joinRequestCounter % 16) == 0) {
+        dr = DR_3;
+    } else if ((joinRequestCounter % 8) == 0) {
+        dr = DR_4;
+    } else {
+        dr = DR_5;
+    }
+
+    return dr;
+}
+
+/**
+ * @brief sets the DR to be used for the next join-request during a short join procedure
+ */
+uint8_t JoinAlternateDrShort(uint8_t joinRequestCounter)
+{
+    uint8_t dr = 0;
+
+    if (joinRequestCounter == 1) {
+        dr = DR_5;
+    } else if (joinRequestCounter == 2) {
+        dr = DR_3;
+    } else if (joinRequestCounter == 3) {
+        dr = DR_0;
+    } else {
+        log_print_error_string("Error: performing more than 3 join requests in short join loop.");
+    }
+
+    return dr;
 }
 
 /**
@@ -145,72 +195,129 @@ static void network_retry_transmission(uint8_t attempt)
  */
 static void run_fsm()
 {
-  switch(join_state)
-  {
-    case STATE_JOINING:
-    {
-      joinRequestTrials++;
+    switch (join_state) {
+    case STATE_JOINING: {
+        joinRequestTrials++;
 
-      if(joinRequestTrials < JOINREQ_NBTRIALS) {
+        uint32_t length = 1;
+        bool short_join_enabled = false;
+        int res = d7ap_fs_read_file(
+            USER_FILE_LORAWAN_JOINTYPE_FILE_ID, 0, (uint8_t*)&short_join_enabled, &length, ROOT_AUTH);
+        if (res != SUCCESS) {
+            log_print_error_string(
+                "failed to read short_join_enabled from JOINTYPE file, use long join, err code: %u.", res);
+            short_join_enabled = false;
+        }
 
-          if(joinRequestTrials > 1)
-          {
-            DPRINT("Nack so trying to join again: %d", joinRequestTrials);
-            network_retry_transmission(joinRequestTrials); //note that it is possible that there will be a delay (it is only calculated in ScheduleTx) 
-            // if there is a delay, then the MacDutyDelay function will be called, which calls the duty_cycle_delay_cb function.
-          }
+        uint8_t nbTrials = JOINREQ_NBTRIALS_LONG;
 
-          MlmeReq_t mlmeReq;
-          mlmeReq.Type = MLME_JOIN;
-          mlmeReq.Req.Join.Datarate = datarate; 
-          LoRaMacStatus_t status = LoRaMacMlmeRequest(&mlmeReq);
-          if(status != LORAMAC_STATUS_OK) {
-            if(status == LORAMAC_STATUS_DUTYCYCLE_RESTRICTED) {
-              DPRINT("Duty cycle limit hit during join procedure; return join failed");
-            } else {
-              log_print_error_string("Unexpected error: %u, return failure. Cancel join procedure.", status);
+        if (short_join_enabled) {
+            nbTrials = JOINREQ_NBTRIALS_SHORT;
+            DPRINT("short join, attempt: %u.", joinRequestTrials);
+        } else {
+            DPRINT("long join, attempt: %u.", joinRequestTrials);
+        }
+
+        if (joinRequestTrials <= nbTrials) {
+
+            if (joinRequestTrials > 1) {
+                DPRINT("Nack so trying to join again: %d", joinRequestTrials);
+                network_retry_transmission(joinRequestTrials); // note that it is possible that there will be a delay
+                                                               // (it is only calculated in ScheduleTx)
+                // if there is a delay, then the MacDutyDelay function will be called, which calls the
+                // duty_cycle_delay_cb function.
             }
+
+            MlmeReq_t mlmeReq;
+            mlmeReq.Type = MLME_JOIN;
+
+            if (short_join_enabled) {
+                mlmeReq.Req.Join.Datarate = JoinAlternateDrShort(joinRequestTrials);
+                mlmeReq.subband = lorawan_get_subband();
+                DPRINT("join using subband %u", mlmeReq.subband);
+            } else {
+                mlmeReq.Req.Join.Datarate = JoinAlternateDrLong(joinRequestTrials);
+                mlmeReq.subband = 0;
+            }
+
+            LoRaMacStatus_t status = LoRaMacMlmeRequest(&mlmeReq);
+            if (status != LORAMAC_STATUS_OK) {
+                if (status == LORAMAC_STATUS_DUTYCYCLE_RESTRICTED) {
+                    DPRINT("Duty cycle limit hit during join procedure; return join failed");
+                } else {
+                    log_print_error_string("Unexpected error: %u, return failure. Cancel join procedure.", status);
+                }
+                join_state = STATE_JOIN_FAILED;
+                if (stack_status_callback)
+                    stack_status_callback(LORAWAN_STACK_JOIN_FAILED, nbTrials);
+            }
+        } else {
+            DPRINT("Error while trying to join: NBTrial Joins failed in succession: %u", joinRequestTrials);
             join_state = STATE_JOIN_FAILED;
-            if(stack_status_callback)
-              stack_status_callback(LORAWAN_STACK_JOIN_FAILED, JOINREQ_NBTRIALS);
-          } 
-      } else {
-          DPRINT("Error while trying to join: NBTrial Joins failed in succession");
-          join_state = STATE_JOIN_FAILED;
-          if(stack_status_callback)
-            stack_status_callback(LORAWAN_STACK_JOIN_FAILED, JOINREQ_NBTRIALS);
-      }
-      //sched_post_task_prio(&run_fsm, MIN_PRIORITY);
-      break;
+            if (short_join_enabled) {
+                length = 1;
+                uint8_t short_joins_failed = 0;
+                res = d7ap_fs_read_file(USER_FILE_LORAWAN_JOINTYPE_FILE_ID, 2, &short_joins_failed, &length, ROOT_AUTH);
+                if (res != SUCCESS) {
+                    log_print_error_string("failed to read short_joins_failed from JOINTYPE file, set to limit to "
+                                           "force end of short join procedure, err code: %u.",
+                        res);
+                    short_joins_failed = SHORT_JOIN_ATTEMPTS_LIMIT;
+                }
+                short_joins_failed++;
+                DPRINT("short joins, limit: %u, %u", short_joins_failed, SHORT_JOIN_ATTEMPTS_LIMIT);
+                if (short_joins_failed >= SHORT_JOIN_ATTEMPTS_LIMIT) {
+                    DPRINT("%u short join attempts failed in succession, reverting to long join process.",
+                        short_joins_failed);
+                    // write file clear to revert to long join process
+                    lorawan_join_type_params_t disable_short_join
+                        = { .short_join_enabled = false, .subband = 0, .short_joins_failed_counter = 0 };
+                    res = d7ap_fs_write_file(USER_FILE_LORAWAN_JOINTYPE_FILE_ID, 0, (const uint8_t*)&disable_short_join,
+                        USER_FILE_LORAWAN_JOINTYPE_SIZE, ROOT_AUTH);
+                    if (res != SUCCESS) {
+                        log_print_error_string(
+                            "failed to write USER_FILE_LORAWAN_JOINTYPE_FILE_ID file to clear contents, err code: %u.",
+                            res);
+                    }
+                } else {
+                    res = d7ap_fs_write_file(USER_FILE_LORAWAN_JOINTYPE_FILE_ID, 2, &short_joins_failed, 1, ROOT_AUTH);
+                    if (res != SUCCESS) {
+                        log_print_error_string("failed to write short_joins_failed to "
+                                               "USER_FILE_LORAWAN_JOINTYPE_FILE_ID file, err code: %u.",
+                            res);
+                    }
+                }
+            }
+            if (stack_status_callback)
+                stack_status_callback(LORAWAN_STACK_JOIN_FAILED, nbTrials);
+        }
+        // sched_post_task_prio(&run_fsm, MIN_PRIORITY);
+        break;
     }
-    case STATE_JOINED:
-    {
-      DPRINT("JOINED");
-      sched_cancel_task(&run_fsm);
-      //if(stack_status_callback)
-      //  stack_status_callback(LORAWAN_STACK_JOINED, 0);
-      break;
+    case STATE_JOINED: {
+        DPRINT("JOINED");
+        sched_cancel_task(&run_fsm);
+        // if(stack_status_callback)
+        //  stack_status_callback(LORAWAN_STACK_JOINED, 0);
+        break;
     }
-    case STATE_JOIN_FAILED:
-    {
-      DPRINT("JOIN FAILED");
-      //if(stack_status_callback)
-      //  stack_status_callback(LORAWAN_STACK_JOIN_FAILED, 0);
-      break;
+    case STATE_JOIN_FAILED: {
+        DPRINT("JOIN FAILED");
+        // if(stack_status_callback)
+        //  stack_status_callback(LORAWAN_STACK_JOIN_FAILED, 0);
+        break;
     }
-     case STATE_NOT_JOINED:
-    {
-      join_state = STATE_JOINING;
-      DPRINT("Keys changed");
-      sched_post_task(&run_fsm);
-      break;
+    case STATE_NOT_JOINED: {
+        join_state = STATE_JOINING;
+        DPRINT("Keys changed");
+        sched_post_task(&run_fsm);
+        break;
     }
-    default:
-    {
-      assert(false);
-      break;
+    default: {
+        assert(false);
+        break;
     }
-  }
+    }
 }
 
 /**
@@ -218,13 +325,10 @@ static void run_fsm()
  * This will update automatically with each function call
  * @return delay in seconds
  */
-uint16_t lorawan_get_duty_cycle_delay()
-{
-  return lorawanGetDutyCycleWaitTime();
-}
+uint16_t lorawan_get_duty_cycle_delay() { return lorawanGetDutyCycleWaitTime(); }
 
 /**
- * @brief Called from LoRaWAN stack and calls registered callback. 
+ * @brief Called from LoRaWAN stack and calls registered callback.
  * This will be called everytime a message is delayed because of duty cycle limitations.
  * Join-requests that cannot be sent because of the duty cycle do not cause this to fire;
  * instead the MlmeRequest returns DUTYCYCLE_RESTRICTED and the Join procedure returns failed.
@@ -233,111 +337,114 @@ uint16_t lorawan_get_duty_cycle_delay()
  */
 static void duty_cycle_delay_cb(uint32_t delay, uint8_t attempt)
 {
-  if(stack_status_callback != NULL)
-    stack_status_callback(LORAWAN_STACK_DUTY_CYCLE_DELAY, attempt);
+    if (stack_status_callback != NULL)
+        stack_status_callback(LORAWAN_STACK_DUTY_CYCLE_DELAY, attempt);
 }
 
 /**
- * @brief Called from LoRaWAN stack and calls registered callbacks. 
+ * @brief Called from LoRaWAN stack and calls registered callbacks.
  * Provides us with MAC Common Part Sublayer data after a LoRaWAN transmit
  * @param McpsConfirm
  */
-static void mcps_confirm(McpsConfirm_t *McpsConfirm)
+static void mcps_confirm(McpsConfirm_t* McpsConfirm)
 {
-  DPRINT("mcps_confirm: %i",McpsConfirm->AckReceived);
-  lorawan_stack_status_t status = LORAWAN_STACK_ERROR_NACK;
-  if(McpsConfirm!=NULL) {
-    if(((McpsConfirm->McpsRequest == MCPS_CONFIRMED && McpsConfirm->AckReceived == 1) || (McpsConfirm->McpsRequest == MCPS_UNCONFIRMED)) && McpsConfirm->Status==LORAMAC_EVENT_INFO_STATUS_OK)
-      status = LORAWAN_STACK_ERROR_OK;
-  }
-  else
-    status = LORAWAN_STACK_ERROR_UNKNOWN;
-  tx_callback(status, McpsConfirm->NbRetries);
-  lorawan_transmitting = false;
+    DPRINT("mcps_confirm: %i", McpsConfirm->AckReceived);
+    lorawan_stack_status_t status = LORAWAN_STACK_ERROR_NACK;
+    if (McpsConfirm != NULL) {
+        if (((McpsConfirm->McpsRequest == MCPS_CONFIRMED && McpsConfirm->AckReceived == 1)
+                || (McpsConfirm->McpsRequest == MCPS_UNCONFIRMED))
+            && McpsConfirm->Status == LORAMAC_EVENT_INFO_STATUS_OK)
+            status = LORAWAN_STACK_ERROR_OK;
+    } else
+        status = LORAWAN_STACK_ERROR_UNKNOWN;
+    tx_callback(status, McpsConfirm->NbRetries);
+    lorawan_transmitting = false;
 }
 
 /**
- * @brief Called from LoRaWAN stack and calls registered callbacks. 
- * Provides us with MAC Common Part Sublayer data after a LoRaWAN received 
+ * @brief Called from LoRaWAN stack and calls registered callbacks.
+ * Provides us with MAC Common Part Sublayer data after a LoRaWAN received
  * @param mcpsIndication
  */
-static void mcps_indication(McpsIndication_t *mcpsIndication)
+static void mcps_indication(McpsIndication_t* mcpsIndication)
 {
-  if(mcpsIndication->Status != LORAMAC_EVENT_INFO_STATUS_OK)
-  {
-    DPRINT("mcps_indication status: %i", mcpsIndication->Status);
-    if(join_state == STATE_JOINING) {
-        DPRINT("mcpsIndication fired occurred while join procedure ongoing, retry a join");
-        sched_post_task(&run_fsm);
+    if (mcpsIndication->Status != LORAMAC_EVENT_INFO_STATUS_OK) {
+        DPRINT("mcps_indication status: %i", mcpsIndication->Status);
+        if (join_state == STATE_JOINING) {
+            DPRINT("mcpsIndication fired occurred while join procedure ongoing, retry a join");
+            sched_post_task(&run_fsm);
+        }
+        return;
     }
-    return;
-  }
-  if( mcpsIndication->RxData == true )
-  {
-    DPRINT("received %i bytes for port %i", mcpsIndication->BufferSize, mcpsIndication->Port);
-    app_data.Port = mcpsIndication->Port;
-    app_data.BuffSize = mcpsIndication->BufferSize;
-    memcpy1(app_data.Buff, mcpsIndication->Buffer, app_data.BuffSize);
-    rx_callback(&app_data);
-  }
+    if (mcpsIndication->RxData == true) {
+        DPRINT("received %i bytes for port %i", mcpsIndication->BufferSize, mcpsIndication->Port);
+        app_data.Port = mcpsIndication->Port;
+        app_data.BuffSize = mcpsIndication->BufferSize;
+        memcpy1(app_data.Buff, mcpsIndication->Buffer, app_data.BuffSize);
+        rx_callback(&app_data);
+    }
 }
 
 /**
- * @brief Called from LoRaWAN stack and calls registered callbacks. 
- * Provides us with MAC layer management entity data after a LoRaWAN join 
+ * @brief Called from LoRaWAN stack and calls registered callbacks.
+ * Provides us with MAC layer management entity data after a LoRaWAN join
  * @param mlmeConfirm
  */
-static void mlme_confirm(MlmeConfirm_t *mlmeConfirm)
+static void mlme_confirm(MlmeConfirm_t* mlmeConfirm)
 {
-  switch(mlmeConfirm->MlmeRequest)
-  {
-    case MLME_JOIN:
-    {
-      if(mlmeConfirm->Status == LORAMAC_EVENT_INFO_STATUS_OK)
-      {
-        DPRINT("join succeeded");
-        joinRequestTrials = 0;
+    switch (mlmeConfirm->MlmeRequest) {
+    case MLME_JOIN: {
+        if (mlmeConfirm->Status == LORAMAC_EVENT_INFO_STATUS_OK) {
+            DPRINT("join succeeded");
+            joinRequestTrials = 0;
 
-        join_state = STATE_JOINED;
+            join_state = STATE_JOINED;
 
-        MibRequestConfirm_t mibReq;
-        mibReq.Type = MIB_ANTENNA_GAIN; //MAC parameters are reset in LoRaMac-Node on every join request sent, so this should be set after a successful join
-        mibReq.Param.AntennaGain = antenna_gain_f;
-        LoRaMacMibSetRequestConfirm( &mibReq );
+            lorawan_join_type_params_t enable_short_join
+                = { .short_join_enabled = true, .subband = 0, .short_joins_failed_counter = 0 };
+            int res = d7ap_fs_write_file(USER_FILE_LORAWAN_JOINTYPE_FILE_ID, 0, (const uint8_t*)&enable_short_join,
+                USER_FILE_LORAWAN_JOINTYPE_SIZE, ROOT_AUTH);
+            if (res != SUCCESS) {
+                log_print_error_string("failed to enable short joins on USER_FILE_LORAWAN_JOINTYPE_FILE_ID file; long "
+                                       "joins will continue to happen instead, err code: %u.",
+                    res);
+            }
+            // note: subband gets written in later via a call to subband_changed
 
-        if(stack_status_callback)
-            stack_status_callback(LORAWAN_STACK_JOINED, mlmeConfirm->NbRetries);
-      }
-      else if (mlmeConfirm->Status == LORAMAC_EVENT_INFO_STATUS_RX2_TIMEOUT) 
-      {
-        DPRINT("join failed because of RX2 timeout, going to attempt to retry");
-        sched_post_task(&run_fsm); 
-      }
-      else
-      {
-        DPRINT("Error while trying to join: %i", mlmeConfirm->Status);
-        DPRINT("attempting to join again");
-        sched_post_task(&run_fsm);
-      }
-      break;
+            MibRequestConfirm_t mibReq;
+            mibReq.Type = MIB_ANTENNA_GAIN; // MAC parameters are reset in LoRaMac-Node on every join request sent, so
+                                            // this should be set after a successful join
+            mibReq.Param.AntennaGain = antenna_gain_f;
+            LoRaMacMibSetRequestConfirm(&mibReq);
+
+            if (stack_status_callback)
+                stack_status_callback(LORAWAN_STACK_JOINED, mlmeConfirm->NbRetries);
+        } else if (mlmeConfirm->Status == LORAMAC_EVENT_INFO_STATUS_RX2_TIMEOUT) {
+            DPRINT("join failed because of RX2 timeout, going to attempt to retry");
+            sched_post_task(&run_fsm);
+        } else {
+            DPRINT("Error while trying to join: %i", mlmeConfirm->Status);
+            DPRINT("attempting to join again");
+            sched_post_task(&run_fsm);
+        }
+        break;
     }
     default:
-      DPRINT("mlme_confirm called for not implemented mlme request %i", mlmeConfirm->MlmeRequest);
-      break;
-  }
+        DPRINT("mlme_confirm called for not implemented mlme request %i", mlmeConfirm->MlmeRequest);
+        break;
+    }
 }
 
 /**
- * @brief Called from LoRaWAN stack and calls registered callbacks. 
+ * @brief Called from LoRaWAN stack and calls registered callbacks.
  * @param mlmeIndication
  */
-static void mlme_indication(MlmeIndication_t *mlmeIndication)
+static void mlme_indication(MlmeIndication_t* mlmeIndication)
 {
-  if(mlmeIndication->Status != LORAMAC_EVENT_INFO_STATUS_OK)
-  {
-    DPRINT("mlme_indication status: %i", mlmeIndication->Status);
-    return;
-  }
+    if (mlmeIndication->Status != LORAMAC_EVENT_INFO_STATUS_OK) {
+        DPRINT("mlme_indication status: %i", mlmeIndication->Status);
+        return;
+    }
 }
 
 /**
@@ -346,12 +453,13 @@ static void mlme_indication(MlmeIndication_t *mlmeIndication)
  */
 static bool is_joined()
 {
-  MibRequestConfirm_t mibReq;
-  mibReq.Type = MIB_NETWORK_ACTIVATION;
-  LoRaMacMibGetRequestConfirm(&mibReq);
+    MibRequestConfirm_t mibReq;
+    mibReq.Type = MIB_NETWORK_ACTIVATION;
+    LoRaMacMibGetRequestConfirm(&mibReq);
 
-  // MIB_NETWORK_JOINED has become MIB_NETWORK_ACTIVATION, indicates whether activation type used was OTAA or ABP. If non-zero, the device has joined.
-  return (mibReq.Param.NetworkActivation != 0); 
+    // MIB_NETWORK_JOINED has become MIB_NETWORK_ACTIVATION, indicates whether activation type used was OTAA or ABP. If
+    // non-zero, the device has joined.
+    return (mibReq.Param.NetworkActivation != 0);
 }
 
 /**
@@ -370,10 +478,8 @@ static void lorawan_otaa_register_keys(uint8_t file_id)
         join_state = STATE_NOT_JOINED;
         memcpy(appEui, keys, 8);
         keys_changed = true;
-
     }
 
-    
     if (memcmp(appKey, &keys[8], 16) != 0) {
         join_state = STATE_NOT_JOINED;
         memcpy(appKey, &keys[8], 16);
@@ -381,14 +487,12 @@ static void lorawan_otaa_register_keys(uint8_t file_id)
         DPRINT_DATA(appKey, 16);
         keys_changed = true;
     }
-    if(keys_changed && was_joining)
-    {
+    if (keys_changed && was_joining) {
         lorawan_stack_deinit();
         lorawan_stack_init_otaa();
-        if(stack_status_callback)
-          stack_status_callback(LORAWAN_STACK_JOIN_FAILED, 1);
+        if (stack_status_callback)
+            stack_status_callback(LORAWAN_STACK_JOIN_FAILED, 1);
     }
-
 }
 
 /**
@@ -411,35 +515,61 @@ static void set_initial_keys()
  */
 static void lorawan_set_antenna_gain(uint8_t file_id)
 {
-  int8_t antenna_gain;
-  uint32_t length = USER_FILE_LORAWAN_ANTENNA_GAIN_SIZE;
-  int res = d7ap_fs_read_file(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, 0, (uint8_t*) &antenna_gain, &length, ROOT_AUTH);
+    int8_t antenna_gain;
+    uint32_t length = USER_FILE_LORAWAN_ANTENNA_GAIN_SIZE;
+    int res = d7ap_fs_read_file(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, 0, (uint8_t*)&antenna_gain, &length, ROOT_AUTH);
 
-  if(res == -ENOENT) {
-      // file does not exist yet (older filesystem version), create it
-      antenna_gain = MODULE_LORAWAN_DEFAULT_ANTENNA_GAIN;
+    if (res == -ENOENT) {
+        // file does not exist yet (older filesystem version), create it
+        antenna_gain = MODULE_LORAWAN_DEFAULT_ANTENNA_GAIN;
 
-      uint8_t antenna_gain_file[1] = {
-          (uint8_t) antenna_gain,
-      };
-        
-      d7ap_fs_file_header_t file_header = {
-        .file_permissions = (file_permission_t){ .guest_read = true, .user_read = true },
-        .file_properties.storage_class = FS_STORAGE_PERMANENT,
-        .length                        = USER_FILE_LORAWAN_ANTENNA_GAIN_SIZE,
-        .allocated_length              = USER_FILE_LORAWAN_ANTENNA_GAIN_SIZE
-      };
+        uint8_t antenna_gain_file[1] = {
+            (uint8_t)antenna_gain,
+        };
 
-      // initialize file on fs
-      int ret = d7ap_fs_init_file(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, &file_header, antenna_gain_file);
-  }
+        d7ap_fs_file_header_t file_header
+            = { .file_permissions = (file_permission_t) { .guest_read = true, .user_read = true },
+                  .file_properties.storage_class = FS_STORAGE_PERMANENT,
+                  .length = USER_FILE_LORAWAN_ANTENNA_GAIN_SIZE,
+                  .allocated_length = USER_FILE_LORAWAN_ANTENNA_GAIN_SIZE };
 
-  antenna_gain_f = (float) antenna_gain;
+        // initialize file on fs
+        int ret = d7ap_fs_init_file(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, &file_header, antenna_gain_file);
+    }
 
-  MibRequestConfirm_t mibReq;
-  mibReq.Type = MIB_ANTENNA_GAIN;
-  mibReq.Param.AntennaGain = antenna_gain_f;
-  LoRaMacMibSetRequestConfirm( &mibReq );
+    antenna_gain_f = (float)antenna_gain;
+
+    MibRequestConfirm_t mibReq;
+    mibReq.Type = MIB_ANTENNA_GAIN;
+    mibReq.Param.AntennaGain = antenna_gain_f;
+    LoRaMacMibSetRequestConfirm(&mibReq);
+}
+
+static void subband_file_init()
+{
+    uint32_t length = USER_FILE_LORAWAN_JOINTYPE_SIZE;
+    lorawan_join_type_params_t disable_short_join
+        = { .short_join_enabled = false, .subband = 0, .short_joins_failed_counter = 0 };
+    int res
+        = d7ap_fs_read_file(USER_FILE_LORAWAN_JOINTYPE_FILE_ID, 0, (uint8_t*)&disable_short_join, &length, ROOT_AUTH);
+
+    if (res == -ENOENT) {
+        DPRINT("initialise subband file");
+        // if the file doesn't already exist (first init after reboot), create it
+        d7ap_fs_file_header_t volatile_file_header
+            = { .file_permissions = (file_permission_t) { .guest_write = true, .user_write = true },
+                  .file_properties.storage_class = FS_STORAGE_VOLATILE,
+                  .length = USER_FILE_LORAWAN_JOINTYPE_SIZE,
+                  .allocated_length = USER_FILE_LORAWAN_JOINTYPE_SIZE };
+
+        res = d7ap_fs_init_file(
+            USER_FILE_LORAWAN_JOINTYPE_FILE_ID, &volatile_file_header, (uint8_t*)&disable_short_join);
+        assert(res == SUCCESS);
+    } else if (res == SUCCESS) {
+        DPRINT("read subband file successfully, it already existed");
+    } else {
+        log_print_error_string("Unexpected error when creating subband file: %u.", res);
+    }
 }
 
 /**
@@ -450,11 +580,12 @@ static void lorawan_set_antenna_gain(uint8_t file_id)
  * @param lorawan_duty_cycle_delay_cb: LoRaWAN delayed because of duty cycle
  * @param lorawan_join_attempt_cb: attempt to join network
  */
-void lorawan_register_cbs(lorawan_rx_callback_t  lorawan_rx_cb, lorawan_tx_completed_callback_t lorawan_tx_cb, lorawan_status_callback_t lorawan_status_cb )
+void lorawan_register_cbs(lorawan_rx_callback_t lorawan_rx_cb, lorawan_tx_completed_callback_t lorawan_tx_cb,
+    lorawan_status_callback_t lorawan_status_cb)
 {
-  rx_callback = lorawan_rx_cb;
-  tx_callback = lorawan_tx_cb;
-  stack_status_callback = lorawan_status_cb;
+    rx_callback = lorawan_rx_cb;
+    tx_callback = lorawan_tx_cb;
+    stack_status_callback = lorawan_status_cb;
 }
 
 /**
@@ -465,208 +596,199 @@ void lorawan_register_cbs(lorawan_rx_callback_t  lorawan_rx_cb, lorawan_tx_compl
  */
 lorawan_stack_status_t lorawan_otaa_is_joined(lorawan_session_config_otaa_t* lorawan_session_config)
 {
-    if(inited == false)
-  {
-    log_print_error_string("TX not possible, not inited"); //Should not happen when using alp layer
-    return LORAWAN_STACK_ERROR_NOT_INITED;
-  }
-  DPRINT("Checking for change in config");
-  if (join_state==STATE_JOINING)
-    return LORAWAN_STACK_ALREADY_JOINING;
+    if (inited == false) {
+        log_print_error_string("TX not possible, not inited"); // Should not happen when using alp layer
+        return LORAWAN_STACK_ERROR_NOT_INITED;
+    }
+    DPRINT("Checking for change in config");
+    if (join_state == STATE_JOINING)
+        return LORAWAN_STACK_ALREADY_JOINING;
 
-  bool joined = (join_state == STATE_JOINED);
-  sched_cancel_task(&run_fsm);
-  datarate = lorawan_session_config->data_rate;
-  
-  if( adr_enabled != lorawan_session_config->adr_enabled)
-  {
-    adr_enabled = lorawan_session_config->adr_enabled;
-    MibRequestConfirm_t mibReq;
-    mibReq.Type = MIB_ADR;
-    mibReq.Param.AdrEnable = adr_enabled;
-    LoRaMacMibSetRequestConfirm( &mibReq );
-  }
- 
-  if(!joined)
-  {
-    LoRaMacStatus_t status=LORAMAC_STATUS_OK;
-    MibRequestConfirm_t mibReq;
-    mibReq.Type = MIB_NETWORK_ACTIVATION;
-    mibReq.Param.NetworkActivation = ACTIVATION_TYPE_NONE;
-    status=LoRaMacMibSetRequestConfirm( &mibReq );
-    //note: for otaa, activation type gets set to ACTIVATION_TYPE_OTAA by the MAC layer on a successful join.
-    if(status!=LORAMAC_STATUS_OK) {
-      assert(false);}
+    bool joined = (join_state == STATE_JOINED);
+    sched_cancel_task(&run_fsm);
+    datarate = lorawan_session_config->data_rate;
 
-    DPRINT("Change found - Init using OTAA");
-    DPRINT("DevEui:");
-    DPRINT_DATA(devEui, 8);
-    DPRINT("AppEui:");
-    DPRINT_DATA(appEui, 8);
-    DPRINT("AppKey:"); 
-    DPRINT_DATA(appKey, 16);
-    DPRINT("Adaptive Data Rate: %d, Data rate: %d", adr_enabled, datarate);
+    if (adr_enabled != lorawan_session_config->adr_enabled) {
+        adr_enabled = lorawan_session_config->adr_enabled;
+        MibRequestConfirm_t mibReq;
+        mibReq.Type = MIB_ADR;
+        mibReq.Param.AdrEnable = adr_enabled;
+        LoRaMacMibSetRequestConfirm(&mibReq);
+    }
 
-   
-    join_state = STATE_JOINING;
-    sched_post_task(&run_fsm);
+    if (!joined) {
+        LoRaMacStatus_t status = LORAMAC_STATUS_OK;
+        MibRequestConfirm_t mibReq;
+        mibReq.Type = MIB_NETWORK_ACTIVATION;
+        mibReq.Param.NetworkActivation = ACTIVATION_TYPE_NONE;
+        status = LoRaMacMibSetRequestConfirm(&mibReq);
+        // note: for otaa, activation type gets set to ACTIVATION_TYPE_OTAA by the MAC layer on a successful join.
+        if (status != LORAMAC_STATUS_OK) {
+            assert(false);
+        }
 
-    joinRequestTrials = 0;
-  }
+        DPRINT("Change found - Join using OTAA");
+        DPRINT("DevEui:");
+        DPRINT_DATA(devEui, 8);
+        DPRINT("AppEui:");
+        DPRINT_DATA(appEui, 8);
+        DPRINT("AppKey:");
+        DPRINT_DATA(appKey, 16);
+        DPRINT("Adaptive Data Rate: %d, Data rate: %d", adr_enabled, datarate);
+
+        if (sched_post_task(&run_fsm) == SUCCESS) {
+            join_state = STATE_JOINING;
+            joinRequestTrials = 0;
+        }
+    }
     return joined ? LORAWAN_STACK_ERROR_OK : LORAWAN_STACK_ERROR_NOT_JOINED;
 }
 
 static LoRaMacRegion_t lorawan_get_region()
 {
-    switch (region)
-    {
-      case MODEM_REGION_AS923_1_DUTY_CYCLE:
-      {
+    switch (region) {
+    case MODEM_REGION_AS923_1_DUTY_CYCLE: {
         return LORAMAC_REGION_AS923;
-      }
-      case MODEM_REGION_AU915:
-      {
+    }
+    case MODEM_REGION_AU915: {
         return LORAMAC_REGION_AU915;
-      }
-      case MODEM_REGION_EU868:
-      {
+    }
+    case MODEM_REGION_EU868: {
         return LORAMAC_REGION_EU868;
-      }
-      case MODEM_REGION_IN865:
-      {
+    }
+    case MODEM_REGION_IN865: {
         return LORAMAC_REGION_IN865;
-      }
-      case MODEM_REGION_US915:
-      {
+    }
+    case MODEM_REGION_US915: {
         return LORAMAC_REGION_US915;
-      }
-      case MODEM_REGION_CN470:
-      {
+    }
+    case MODEM_REGION_CN470: {
         return LORAMAC_REGION_CN470;
-      }
-      case MODEM_REGION_CN779:
-      case MODEM_REGION_EU433:
-      case MODEM_REGION_KR920:
-      case MODEM_REGION_RU864:
-      case MODEM_REGION_AS923_1_DUTY_CYCLE_DWELL_TIME:
-      case MODEM_REGION_AS923_1_NO_RESTRICTIONS:
-      case MODEM_REGION_AS923_2:
-      case MODEM_REGION_AS923_3:
-      case MODEM_REGION_AS923_4:
-      {
+    }
+    case MODEM_REGION_CN779:
+    case MODEM_REGION_EU433:
+    case MODEM_REGION_KR920:
+    case MODEM_REGION_RU864:
+    case MODEM_REGION_AS923_1_DUTY_CYCLE_DWELL_TIME:
+    case MODEM_REGION_AS923_1_NO_RESTRICTIONS:
+    case MODEM_REGION_AS923_2:
+    case MODEM_REGION_AS923_3:
+    case MODEM_REGION_AS923_4: {
         log_print_error_string("Error: Unsupported region: %u", region);
         assert(false);
         break;
-      }
-      default:
-      {
+    }
+    default: {
         log_print_error_string("Error: return default");
         break;
-      }
+    }
     }
     return 0;
 }
-
 
 /**
  * @brief Inits the LoRaWAN stack using over the air activation
  * @param lorawan_session_config
  */
-error_t lorawan_stack_init_otaa() { 
-  if(inited)
-    return EALREADY;
-  if(first_init) {
-    set_initial_keys();
-    lorawan_set_antenna_gain(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID);
-  }
-       
+error_t lorawan_stack_init_otaa()
+{
+    if (inited)
+        return EALREADY;
+    if (first_init) {
+        set_initial_keys();
+        lorawan_set_antenna_gain(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID);
+        subband_file_init();
+    }
 
-  HW_Init(); // TODO refactor*/
-  join_state = STATE_NOT_JOINED;
-  lorawan_transmitting = false;     
-  sched_register_task(&run_fsm);
+    HW_Init(); // TODO refactor*/
+    join_state = STATE_NOT_JOINED;
+    lorawan_transmitting = false;
+    sched_register_task(&run_fsm);
 
-  loraMacPrimitives.MacMcpsConfirm = &mcps_confirm;
-  loraMacPrimitives.MacMcpsIndication = &mcps_indication;
-  loraMacPrimitives.MacMlmeConfirm = &mlme_confirm;
-  loraMacPrimitives.MacMlmeIndication = &mlme_indication;
-  loraMacPrimitives.MacDutyDelay = &duty_cycle_delay_cb;
-  loraMacPrimitives.MacRetryTransmission = &network_retry_transmission;
+    loraMacPrimitives.MacMcpsConfirm = &mcps_confirm;
+    loraMacPrimitives.MacMcpsIndication = &mcps_indication;
+    loraMacPrimitives.MacMlmeConfirm = &mlme_confirm;
+    loraMacPrimitives.MacMlmeIndication = &mlme_indication;
+    loraMacPrimitives.MacDutyDelay = &duty_cycle_delay_cb;
+    loraMacPrimitives.MacRetryTransmission = &network_retry_transmission;
+    loraMacPrimitives.MacSubbandChanged = &subband_changed;
 
-  //these callbacks are used by the LoRaMac to get the DevEui and AppEui when needed
-  //in older versions the keys were provided with each join request. In current LoRaMac-node these are saved in an emulated secure element
-  //but in order to avoid duplication, we instead save them here and provide LoRaMac callbacks to access them
-  loraMacCallbacks.GetDevEui = &lorawan_get_deveui;
-  loraMacCallbacks.GetAppEui = &lorawan_get_appeui;
+    // these callbacks are used by the LoRaMac to get the DevEui and AppEui when needed
+    // in older versions the keys were provided with each join request. In current LoRaMac-node these are saved in an
+    // emulated secure element but in order to avoid duplication, we instead save them here and provide LoRaMac callbacks
+    // to access them
+    loraMacCallbacks.GetDevEui = &lorawan_get_deveui;
+    loraMacCallbacks.GetAppEui = &lorawan_get_appeui;
 
-  loraMacStatus = LoRaMacInitialization(&loraMacPrimitives, &loraMacCallbacks, lorawan_get_region());
-  if(loraMacStatus == LORAMAC_STATUS_OK) {
-    DPRINT("init OK");
-  } else {
-    DPRINT("init failed %d", loraMacStatus);
-    return -FAIL;
-  }
+    loraMacStatus = LoRaMacInitialization(&loraMacPrimitives, &loraMacCallbacks, lorawan_get_region());
+    if (loraMacStatus == LORAMAC_STATUS_OK) {
+        DPRINT("init OK");
+    } else {
+        DPRINT("init failed %d", loraMacStatus);
+        return -FAIL;
+    }
 
-  MibRequestConfirm_t mibReq;
+    MibRequestConfirm_t mibReq;
 
-  mibReq.Type = MIB_PUBLIC_NETWORK;
-  mibReq.Param.EnablePublicNetwork = LORAWAN_PUBLIC_NETWORK_ENABLED;
-  LoRaMacMibSetRequestConfirm( &mibReq );
+    mibReq.Type = MIB_PUBLIC_NETWORK;
+    mibReq.Param.EnablePublicNetwork = LORAWAN_PUBLIC_NETWORK_ENABLED;
+    LoRaMacMibSetRequestConfirm(&mibReq);
 
-  mibReq.Type = MIB_DEVICE_CLASS;
-  mibReq.Param.Class = LORAWAN_CLASS;
-  LoRaMacMibSetRequestConfirm( &mibReq );
+    mibReq.Type = MIB_DEVICE_CLASS;
+    mibReq.Param.Class = LORAWAN_CLASS;
+    LoRaMacMibSetRequestConfirm(&mibReq);
 
-  mibReq.Type = MIB_NWK_KEY; //note: the naming conventions in LoRaMac-node follows the LoRaWAN 1.1 naming convention, but the security used in the version we fork is still 1.0.3
-  mibReq.Param.NwkKey = appKey; 
-  LoRaMacMibSetRequestConfirm( &mibReq );
+    mibReq.Type = MIB_NWK_KEY; // note: the naming conventions in LoRaMac-node follows the LoRaWAN 1.1 naming
+                               // convention, but the security used in the version we fork is still 1.0.3
+    mibReq.Param.NwkKey = appKey;
+    LoRaMacMibSetRequestConfirm(&mibReq);
 
-  mibReq.Type = MIB_DEFAULT_ANTENNA_GAIN;
-  mibReq.Param.DefaultAntennaGain = MODULE_LORAWAN_DEFAULT_ANTENNA_GAIN;
-  LoRaMacMibSetRequestConfirm( &mibReq );
-  
+    mibReq.Type = MIB_DEFAULT_ANTENNA_GAIN;
+    mibReq.Param.DefaultAntennaGain = MODULE_LORAWAN_DEFAULT_ANTENNA_GAIN;
+    LoRaMacMibSetRequestConfirm(&mibReq);
 
-#if defined( REGION_EU868 )
-  LoRaMacTestSetDutyCycleOn(true);
+#if defined(REGION_EU868)
+    LoRaMacTestSetDutyCycleOn(true);
 
-#if( USE_SEMTECH_DEFAULT_CHANNEL_LINEUP == 1 )
-  LoRaMacChannelAdd( 3, ( ChannelParams_t )LC4 );
-  LoRaMacChannelAdd( 4, ( ChannelParams_t )LC5 );
-  LoRaMacChannelAdd( 5, ( ChannelParams_t )LC6 );
-  LoRaMacChannelAdd( 6, ( ChannelParams_t )LC7 );
-  LoRaMacChannelAdd( 7, ( ChannelParams_t )LC8 );
-  LoRaMacChannelAdd( 8, ( ChannelParams_t )LC9 );
-  LoRaMacChannelAdd( 9, ( ChannelParams_t )LC10 );
+#if (USE_SEMTECH_DEFAULT_CHANNEL_LINEUP == 1)
+    LoRaMacChannelAdd(3, (ChannelParams_t)LC4);
+    LoRaMacChannelAdd(4, (ChannelParams_t)LC5);
+    LoRaMacChannelAdd(5, (ChannelParams_t)LC6);
+    LoRaMacChannelAdd(6, (ChannelParams_t)LC7);
+    LoRaMacChannelAdd(7, (ChannelParams_t)LC8);
+    LoRaMacChannelAdd(8, (ChannelParams_t)LC9);
+    LoRaMacChannelAdd(9, (ChannelParams_t)LC10);
 
-  mibReq.Type = MIB_RX2_DEFAULT_CHANNEL;
-  mibReq.Param.Rx2DefaultChannel = ( Rx2ChannelParams_t ){ 869525000, DR_3 };
-  LoRaMacMibSetRequestConfirm( &mibReq );
+    mibReq.Type = MIB_RX2_DEFAULT_CHANNEL;
+    mibReq.Param.Rx2DefaultChannel = (Rx2ChannelParams_t) { 869525000, DR_3 };
+    LoRaMacMibSetRequestConfirm(&mibReq);
 
-  mibReq.Type = MIB_RX2_CHANNEL;
-  mibReq.Param.Rx2Channel = ( Rx2ChannelParams_t ){ 869525000, DR_3 };
-  LoRaMacMibSetRequestConfirm( &mibReq );
+    mibReq.Type = MIB_RX2_CHANNEL;
+    mibReq.Param.Rx2Channel = (Rx2ChannelParams_t) { 869525000, DR_3 };
+    LoRaMacMibSetRequestConfirm(&mibReq);
 #endif
 
 #endif
 
-  LoRaMacStart( ); // start up the LoRaMac (change from default state, which is LORAMAC_STOPPED)
-  
-  sched_register_task(&LoRaMacProcess);
+    LoRaMacStart(); // start up the LoRaMac (change from default state, which is LORAMAC_STOPPED)
 
-  d7ap_fs_register_file_modified_callback(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, &lorawan_set_antenna_gain);
-  
-  inited = true;
+    sched_register_task(&LoRaMacProcess);
 
-  return SUCCESS;
+    d7ap_fs_register_file_modified_callback(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID, &lorawan_set_antenna_gain);
+
+    inited = true;
+
+    return SUCCESS;
 }
 
 /**
  * @brief Deinitialize the LoRaWAN stack
  * @param lorawan_session_config
  */
-void lorawan_stack_deinit(){
-    if(!inited)
-      return;
+void lorawan_stack_deinit()
+{
+    if (!inited)
+        return;
     inited = false;
     DPRINT("Deiniting LoRaWAN stack");
     sched_cancel_task(&run_fsm);
@@ -686,100 +808,107 @@ void lorawan_stack_deinit(){
  * @param request_ack
  * @return lorawan stack status
  */
-lorawan_stack_status_t lorawan_stack_send(uint8_t* payload, uint8_t length, uint8_t app_port, bool request_ack) {
+lorawan_stack_status_t lorawan_stack_send(uint8_t* payload, uint8_t length, uint8_t app_port, bool request_ack)
+{
 
-  if(inited == false)
-  {
-    log_print_error_string("TX not possible, not inited"); //Should not happen when using alp layer
-    return LORAWAN_STACK_ERROR_NOT_INITED;
-  }
-  if(!is_joined()) 
-  {
-    log_print_error_string("TX not possible, not joined"); //Should not happen when using alp layer
-    return LORAWAN_STACK_ERROR_NOT_JOINED;
-  }
-
-  if(lorawan_transmitting)
-  {
-    DPRINT("TX not possible, already transmitting");
-    return LORAWAN_STACK_ALREADY_TRANSMITTING;
-  }
-
-
-  if(length > LORAWAN_APP_DATA_BUFF_SIZE)
-      return LORAWAN_STACK_ERROR_TX_NOT_POSSIBLE;
-  
-
-  memcpy1(app_data.Buff, payload, length);
-  app_data.BuffSize = length;
-  app_data.Port = app_port;
-
-  McpsReq_t mcpsReq;
-  LoRaMacTxInfo_t txInfo;
-  if(LoRaMacQueryTxPossible(app_data.BuffSize, &txInfo) != LORAMAC_STATUS_OK )
-  {
-    if(app_data.BuffSize > txInfo.CurrentPossiblePayloadSize)
-    {
-      // payload size is too big for frame, cannot send
-      DPRINT("TX not possible, max payloadsize %i, trying to transmit %i", txInfo.CurrentPossiblePayloadSize, app_data.BuffSize);
-      return LORAWAN_STACK_ERROR_TX_NOT_POSSIBLE;
-    } else {
-      // payload size + MAC commands is too big,
-      // Send empty frame in order to flush MAC commands
-      DPRINT("TX not possible, max payloadsize %i, trying to transmit %i and %i bytes of MAC commands", txInfo.CurrentPossiblePayloadSize, app_data.BuffSize, txInfo.CurrentPossiblePayloadSize - txInfo.MaxPossibleApplicationDataSize);
-      DPRINT("Flush MAC commands");
-      mcpsReq.Type = MCPS_UNCONFIRMED;
-      mcpsReq.Req.Unconfirmed.fBuffer = NULL;
-      mcpsReq.Req.Unconfirmed.fBufferSize = 0;
-      mcpsReq.Req.Unconfirmed.Datarate = datarate;
-      LoRaMacMcpsRequest(&mcpsReq);
-      return LORAWAN_STACK_ALREADY_TRANSMITTING;
+    if (inited == false) {
+        log_print_error_string("TX not possible, not inited"); // Should not happen when using alp layer
+        return LORAWAN_STACK_ERROR_NOT_INITED;
     }
-  }
+    if (!is_joined()) {
+        log_print_error_string("TX not possible, not joined"); // Should not happen when using alp layer
+        return LORAWAN_STACK_ERROR_NOT_JOINED;
+    }
 
-  if(!request_ack)
-  {
-    mcpsReq.Type = MCPS_UNCONFIRMED;
-    mcpsReq.Req.Unconfirmed.fPort = app_data.Port;
-    mcpsReq.Req.Unconfirmed.fBuffer = app_data.Buff;
-    mcpsReq.Req.Unconfirmed.fBufferSize = app_data.BuffSize;
-    mcpsReq.Req.Unconfirmed.Datarate = datarate;
-  }
-  else
-  {
-    mcpsReq.Type = MCPS_CONFIRMED;
-    mcpsReq.Req.Confirmed.fPort = app_data.Port;
-    mcpsReq.Req.Confirmed.fBuffer = app_data.Buff;
-    mcpsReq.Req.Confirmed.fBufferSize = app_data.BuffSize;
-    mcpsReq.Req.Confirmed.NbTrials = 8;
-    mcpsReq.Req.Confirmed.Datarate = datarate;
-  }
+    if (lorawan_transmitting) {
+        DPRINT("TX not possible, already transmitting");
+        return LORAWAN_STACK_ALREADY_TRANSMITTING;
+    }
 
-  LoRaMacStatus_t status = LoRaMacMcpsRequest(&mcpsReq);
-  if(status != LORAMAC_STATUS_OK) {
-    //  state = STATE_SLEEP;
-    DPRINT("failed sending data (status %i)", status);
-    return LORAWAN_STACK_ERROR_UNKNOWN;
-  }
+    if (length > LORAWAN_APP_DATA_BUFF_SIZE)
+        return LORAWAN_STACK_ERROR_TX_NOT_POSSIBLE;
 
-  lorawan_transmitting = true;
-  return LORAWAN_STACK_ERROR_OK;
+    memcpy1(app_data.Buff, payload, length);
+    app_data.BuffSize = length;
+    app_data.Port = app_port;
+
+    McpsReq_t mcpsReq;
+    LoRaMacTxInfo_t txInfo;
+    if (LoRaMacQueryTxPossible(app_data.BuffSize, &txInfo) != LORAMAC_STATUS_OK) {
+        if (app_data.BuffSize > txInfo.CurrentPossiblePayloadSize) {
+            // payload size is too big for frame, cannot send
+            DPRINT("TX not possible, max payloadsize %i, trying to transmit %i", txInfo.CurrentPossiblePayloadSize,
+                app_data.BuffSize);
+            return LORAWAN_STACK_ERROR_TX_NOT_POSSIBLE;
+        } else {
+            // payload size + MAC commands is too big,
+            // Send empty frame in order to flush MAC commands
+            DPRINT("TX not possible, max payloadsize %i, trying to transmit %i and %i bytes of MAC commands",
+                txInfo.CurrentPossiblePayloadSize, app_data.BuffSize,
+                txInfo.CurrentPossiblePayloadSize - txInfo.MaxPossibleApplicationDataSize);
+            DPRINT("Flush MAC commands");
+            mcpsReq.Type = MCPS_UNCONFIRMED;
+            mcpsReq.Req.Unconfirmed.fBuffer = NULL;
+            mcpsReq.Req.Unconfirmed.fBufferSize = 0;
+            mcpsReq.Req.Unconfirmed.Datarate = datarate;
+            LoRaMacMcpsRequest(&mcpsReq);
+            return LORAWAN_STACK_ALREADY_TRANSMITTING;
+        }
+    }
+
+    if (!request_ack) {
+        mcpsReq.Type = MCPS_UNCONFIRMED;
+        mcpsReq.Req.Unconfirmed.fPort = app_data.Port;
+        mcpsReq.Req.Unconfirmed.fBuffer = app_data.Buff;
+        mcpsReq.Req.Unconfirmed.fBufferSize = app_data.BuffSize;
+        mcpsReq.Req.Unconfirmed.Datarate = datarate;
+    } else {
+        mcpsReq.Type = MCPS_CONFIRMED;
+        mcpsReq.Req.Confirmed.fPort = app_data.Port;
+        mcpsReq.Req.Confirmed.fBuffer = app_data.Buff;
+        mcpsReq.Req.Confirmed.fBufferSize = app_data.BuffSize;
+        mcpsReq.Req.Confirmed.NbTrials = 12;
+        mcpsReq.Req.Confirmed.Datarate = datarate;
+    }
+
+    LoRaMacStatus_t status = LoRaMacMcpsRequest(&mcpsReq);
+    if (status != LORAMAC_STATUS_OK) {
+        //  state = STATE_SLEEP;
+        DPRINT("failed sending data (status %i)", status);
+        return LORAWAN_STACK_ERROR_UNKNOWN;
+    }
+
+    lorawan_transmitting = true;
+    return LORAWAN_STACK_ERROR_OK;
 }
 
 /**
  * @brief returns saved devEui
- * 
+ *
  * @return lorawan devEui
  */
-static uint8_t* lorawan_get_deveui( void ) {
-    return devEui;
-}
+static uint8_t* lorawan_get_deveui(void) { return devEui; }
 
 /**
  * @brief returns saved AppEui
- * 
+ *
  * @return lorawan appEui (in LoRaWAN 1.1, name is changed to   joinEui)
  */
-static uint8_t* lorawan_get_appeui( void ) {
-    return appEui;
+static uint8_t* lorawan_get_appeui(void) { return appEui; }
+
+/**
+ * @brief returns saved subband
+ *
+ * @return the saved subband
+ */
+static uint8_t lorawan_get_subband(void)
+{
+    uint32_t length = 1;
+    uint8_t subband = 0;
+    int res = d7ap_fs_read_file(USER_FILE_LORAWAN_JOINTYPE_FILE_ID, 1, (uint8_t*)&subband, &length, ROOT_AUTH);
+    if (res != SUCCESS) {
+        log_print_error_string("failed to read subband from JOINTYPE file, assume it is 0, err code: %u.", res);
+        subband = 0;
+    }
+    return subband;
 }

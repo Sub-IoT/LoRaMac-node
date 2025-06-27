@@ -1104,3 +1104,12 @@ void RegionAS923RxBeaconSetup( RxBeaconSetup_t* rxBeaconSetup, uint8_t* outDr )
     // Store downlink datarate
     *outDr = AS923_BEACON_CHANNEL_DR;
 }
+
+uint8_t RegionAS923GetSubband() {
+    DPRINT("No subbands in this region.");
+    return 0;
+}
+
+LoRaMacStatus_t RegionAS923SetSubband( uint8_t subband ) {
+    return LORAMAC_STATUS_OK;
+}

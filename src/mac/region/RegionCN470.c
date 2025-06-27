@@ -775,3 +775,77 @@ void RegionCN470RxBeaconSetup( RxBeaconSetup_t* rxBeaconSetup, uint8_t* outDr )
     // Store downlink datarate
     *outDr = CN470_BEACON_CHANNEL_DR;
 }
+
+uint8_t RegionCN470GetSubband() {
+    uint8_t foundCount = 0;
+    uint8_t subband = 0;
+
+    for( uint8_t i = 0; i <= 12; i++ )
+    {
+        uint16_t comparator = 0xFF00;
+        if( (i % 2)  == 0) 
+        {
+            comparator = 0x00FF;
+        }
+        if(NvmCtx.ChannelsMask[i/2] == comparator ) 
+        {
+            subband = i+1; //lowest subband is FSB1
+            foundCount++;
+        }    
+    }
+    
+    if(foundCount > 1) {
+        DPRINT("Multiple subbands currently set, so do not assume on which one to join");
+        return 0; // device can use multiple subbands, so do not make assumptions about which one on joining
+    } else {
+        if(subband == 0) {
+            DPRINT("No set subband found");
+        } else {
+            DPRINT("Subband saved: %u", subband);
+        }
+        return subband; 
+    }
+}
+
+LoRaMacStatus_t RegionCN470SetSubband( uint8_t subband ) {
+
+    if(subband == 0 || subband > 12) 
+    {
+        DPRINT("Not setting any particular subband before the join");
+        return LORAMAC_STATUS_OK;
+    }
+    DPRINT("Set subband to be: %u", subband);
+    subband--; //lowest subband is FSB1, not FSB0
+
+    for( uint8_t i = 0; i < 12; i++ )
+    {
+        if( i == subband )
+        {
+            if( ( i % 2 ) == 0 )
+            {
+                // Enable a bank of 8 125kHz channels, 8 LSBs
+                NvmCtx.ChannelsMask[i/2] |= 0x00FF;
+            }
+            else
+            {
+                // Enable a bank of 8 125kHz channels, 8 MSBs
+                NvmCtx.ChannelsMask[i/2] |= 0xFF00;
+            }
+        }
+        else
+        {
+            if( ( i % 2 ) == 0 )
+            {
+                // Disable a bank of 8 125kHz channels, 8 LSBs
+                NvmCtx.ChannelsMask[i/2] &= 0xFF00;
+            }
+            else
+            {
+                // Disable a bank of 8 125kHz channels, 8 MSBs
+                NvmCtx.ChannelsMask[i/2] &= 0x00FF;
+            }
+        }
+    }
+
+    return LORAMAC_STATUS_OK;
+}

@@ -57,6 +57,9 @@
 #define AS923_SET_CONTINUOUS_WAVE( )               AS923_CASE { RegionAS923SetContinuousWave( continuousWave ); break; }
 #define AS923_APPLY_DR_OFFSET( )                   AS923_CASE { return RegionAS923ApplyDrOffset( downlinkDwellTime, dr, drOffset ); }
 #define AS923_RX_BEACON_SETUP( )                   AS923_CASE { RegionAS923RxBeaconSetup( rxBeaconSetup, outDr ); break; }
+#define AS923_GET_SUBBAND( )                       AS923_CASE { return RegionAS923GetSubband(); }
+#define AS923_SET_SUBBAND( )                       AS923_CASE { return RegionAS923SetSubband( subband ); }
+
 #else
 #define AS923_IS_ACTIVE( )
 #define AS923_GET_PHY_PARAM( )
@@ -81,6 +84,8 @@
 #define AS923_SET_CONTINUOUS_WAVE( )
 #define AS923_APPLY_DR_OFFSET( )
 #define AS923_RX_BEACON_SETUP( )
+#define AS923_GET_SUBBAND( )
+#define AS923_SET_SUBBAND( )
 #endif
 
 #ifdef REGION_AU915
@@ -109,6 +114,8 @@
 #define AU915_SET_CONTINUOUS_WAVE( )               AU915_CASE { RegionAU915SetContinuousWave( continuousWave ); break; }
 #define AU915_APPLY_DR_OFFSET( )                   AU915_CASE { return RegionAU915ApplyDrOffset( downlinkDwellTime, dr, drOffset ); }
 #define AU915_RX_BEACON_SETUP( )                   AU915_CASE { RegionAU915RxBeaconSetup( rxBeaconSetup, outDr ); break; }
+#define AU915_GET_SUBBAND( )                       AU915_CASE { return RegionAU915GetSubband(); }
+#define AU915_SET_SUBBAND( )                       AU915_CASE { return RegionAU915SetSubband( subband ); }
 #else
 #define AU915_IS_ACTIVE( )
 #define AU915_GET_PHY_PARAM( )
@@ -133,6 +140,8 @@
 #define AU915_SET_CONTINUOUS_WAVE( )
 #define AU915_APPLY_DR_OFFSET( )
 #define AU915_RX_BEACON_SETUP( )
+#define AU915_GET_SUBBAND( )
+#define AU915_SET_SUBBAND( )
 #endif
 
 #ifdef REGION_CN470
@@ -161,6 +170,8 @@
 #define CN470_SET_CONTINUOUS_WAVE( )               CN470_CASE { RegionCN470SetContinuousWave( continuousWave ); break; }
 #define CN470_APPLY_DR_OFFSET( )                   CN470_CASE { return RegionCN470ApplyDrOffset( downlinkDwellTime, dr, drOffset ); }
 #define CN470_RX_BEACON_SETUP( )                   CN470_CASE { RegionCN470RxBeaconSetup( rxBeaconSetup, outDr ); break; }
+#define CN470_GET_SUBBAND( )                       CN470_CASE { return RegionCN470GetSubband(); }
+#define CN470_SET_SUBBAND( )                       CN470_CASE { return RegionCN470SetSubband( subband ); }
 #else
 #define CN470_IS_ACTIVE( )
 #define CN470_GET_PHY_PARAM( )
@@ -185,6 +196,8 @@
 #define CN470_SET_CONTINUOUS_WAVE( )
 #define CN470_APPLY_DR_OFFSET( )
 #define CN470_RX_BEACON_SETUP( )
+#define CN470_GET_SUBBAND( )
+#define CN470_SET_SUBBAND( )
 #endif
 
 #ifdef REGION_CN779
@@ -213,6 +226,8 @@
 #define CN779_SET_CONTINUOUS_WAVE( )               CN779_CASE { RegionCN779SetContinuousWave( continuousWave ); break; }
 #define CN779_APPLY_DR_OFFSET( )                   CN779_CASE { return RegionCN779ApplyDrOffset( downlinkDwellTime, dr, drOffset ); }
 #define CN779_RX_BEACON_SETUP( )                   CN779_CASE { RegionCN779RxBeaconSetup( rxBeaconSetup, outDr ); break; }
+#define CN779_GET_SUBBAND( )                       CN779_CASE { return RegionCN779GetSubband(); }
+#define CN779_SET_SUBBAND( )                       CN779_CASE { return RegionCN779SetSubband( subband ); }
 #else
 #define CN779_IS_ACTIVE( )
 #define CN779_GET_PHY_PARAM( )
@@ -237,6 +252,8 @@
 #define CN779_SET_CONTINUOUS_WAVE( )
 #define CN779_APPLY_DR_OFFSET( )
 #define CN779_RX_BEACON_SETUP( )
+#define CN779_GET_SUBBAND( )
+#define CN779_SET_SUBBAND( )
 #endif
 
 #ifdef REGION_EU433
@@ -265,6 +282,8 @@
 #define EU433_SET_CONTINUOUS_WAVE( )               EU433_CASE { RegionEU433SetContinuousWave( continuousWave ); break; }
 #define EU433_APPLY_DR_OFFSET( )                   EU433_CASE { return RegionEU433ApplyDrOffset( downlinkDwellTime, dr, drOffset ); }
 #define EU433_RX_BEACON_SETUP( )                   EU433_CASE { RegionEU433RxBeaconSetup( rxBeaconSetup, outDr ); break; }
+#define EU433_GET_SUBBAND( )                       EU433_CASE { return RegionEU433GetSubband(); }
+#define EU433_SET_SUBBAND( )                       EU433_CASE { return RegionEU433SetSubband( subband ); }
 #else
 #define EU433_IS_ACTIVE( )
 #define EU433_GET_PHY_PARAM( )
@@ -289,6 +308,8 @@
 #define EU433_SET_CONTINUOUS_WAVE( )
 #define EU433_APPLY_DR_OFFSET( )
 #define EU433_RX_BEACON_SETUP( )
+#define EU433_GET_SUBBAND( )
+#define EU433_SET_SUBBAND( )
 #endif
 
 #ifdef REGION_EU868
@@ -317,6 +338,8 @@
 #define EU868_SET_CONTINUOUS_WAVE( )               EU868_CASE { RegionEU868SetContinuousWave( continuousWave ); break; }
 #define EU868_APPLY_DR_OFFSET( )                   EU868_CASE { return RegionEU868ApplyDrOffset( downlinkDwellTime, dr, drOffset ); }
 #define EU868_RX_BEACON_SETUP( )                   EU868_CASE { RegionEU868RxBeaconSetup( rxBeaconSetup, outDr ); break; }
+#define EU868_GET_SUBBAND( )                       EU868_CASE { return RegionEU868GetSubband(); }
+#define EU868_SET_SUBBAND( )                       EU868_CASE { return RegionEU868SetSubband( subband ); }
 #else
 #define EU868_IS_ACTIVE( )
 #define EU868_GET_PHY_PARAM( )
@@ -341,6 +364,8 @@
 #define EU868_SET_CONTINUOUS_WAVE( )
 #define EU868_APPLY_DR_OFFSET( )
 #define EU868_RX_BEACON_SETUP( )
+#define EU868_GET_SUBBAND( )
+#define EU868_SET_SUBBAND( )
 #endif
 
 #ifdef REGION_KR920
@@ -369,6 +394,8 @@
 #define KR920_SET_CONTINUOUS_WAVE( )               KR920_CASE { RegionKR920SetContinuousWave( continuousWave ); break; }
 #define KR920_APPLY_DR_OFFSET( )                   KR920_CASE { return RegionKR920ApplyDrOffset( downlinkDwellTime, dr, drOffset ); }
 #define KR920_RX_BEACON_SETUP( )                   KR920_CASE { RegionKR920RxBeaconSetup( rxBeaconSetup, outDr ); break; }
+#define KR920_GET_SUBBAND( )                       KR920_CASE { return RegionKR920GetSubband(); }
+#define KR920_SET_SUBBAND( )                       KR920_CASE { return RegionKR920SetSubband( subband ); }
 #else
 #define KR920_IS_ACTIVE( )
 #define KR920_GET_PHY_PARAM( )
@@ -393,6 +420,8 @@
 #define KR920_SET_CONTINUOUS_WAVE( )
 #define KR920_APPLY_DR_OFFSET( )
 #define KR920_RX_BEACON_SETUP( )
+#define KR920_GET_SUBBAND( )
+#define KR920_SET_SUBBAND( )
 #endif
 
 #ifdef REGION_IN865
@@ -421,6 +450,8 @@
 #define IN865_SET_CONTINUOUS_WAVE( )               IN865_CASE { RegionIN865SetContinuousWave( continuousWave ); break; }
 #define IN865_APPLY_DR_OFFSET( )                   IN865_CASE { return RegionIN865ApplyDrOffset( downlinkDwellTime, dr, drOffset ); }
 #define IN865_RX_BEACON_SETUP( )                   IN865_CASE { RegionIN865RxBeaconSetup( rxBeaconSetup, outDr ); break; }
+#define IN865_GET_SUBBAND( )                       IN865_CASE { return RegionIN865GetSubband(); }
+#define IN865_SET_SUBBAND( )                       IN865_CASE { return RegionIN865SetSubband( subband ); }
 #else
 #define IN865_IS_ACTIVE( )
 #define IN865_GET_PHY_PARAM( )
@@ -445,6 +476,8 @@
 #define IN865_SET_CONTINUOUS_WAVE( )
 #define IN865_APPLY_DR_OFFSET( )
 #define IN865_RX_BEACON_SETUP( )
+#define IN865_GET_SUBBAND( )
+#define IN865_SET_SUBBAND( )
 #endif
 
 #ifdef REGION_US915
@@ -473,6 +506,8 @@
 #define US915_SET_CONTINUOUS_WAVE( )               US915_CASE { RegionUS915SetContinuousWave( continuousWave ); break; }
 #define US915_APPLY_DR_OFFSET( )                   US915_CASE { return RegionUS915ApplyDrOffset( downlinkDwellTime, dr, drOffset ); }
 #define US915_RX_BEACON_SETUP( )                   US915_CASE { RegionUS915RxBeaconSetup( rxBeaconSetup, outDr ); break; }
+#define US915_GET_SUBBAND( )                       US915_CASE { return RegionUS915GetSubband(); }
+#define US915_SET_SUBBAND( )                       US915_CASE { return RegionUS915SetSubband( subband ); }
 #else
 #define US915_IS_ACTIVE( )
 #define US915_GET_PHY_PARAM( )
@@ -497,6 +532,8 @@
 #define US915_SET_CONTINUOUS_WAVE( )
 #define US915_APPLY_DR_OFFSET( )
 #define US915_RX_BEACON_SETUP( )
+#define US915_GET_SUBBAND( )
+#define US915_SET_SUBBAND( )
 #endif
 
 #ifdef REGION_RU864
@@ -525,6 +562,8 @@
 #define RU864_SET_CONTINUOUS_WAVE( )               RU864_CASE { RegionRU864SetContinuousWave( continuousWave ); break; }
 #define RU864_APPLY_DR_OFFSET( )                   RU864_CASE { return RegionRU864ApplyDrOffset( downlinkDwellTime, dr, drOffset ); }
 #define RU864_RX_BEACON_SETUP( )                   RU864_CASE { RegionRU864RxBeaconSetup( rxBeaconSetup, outDr ); break; }
+#define RU864_GET_SUBBAND( )                       RU864_CASE { return RegionRU864GetSubband(); }
+#define RU864_SET_SUBBAND( )                       RU864_CASE { return RegionRU864SetSubband( subband ); }
 #else
 #define RU864_IS_ACTIVE( )
 #define RU864_GET_PHY_PARAM( )
@@ -549,6 +588,8 @@
 #define RU864_SET_CONTINUOUS_WAVE( )
 #define RU864_APPLY_DR_OFFSET( )
 #define RU864_RX_BEACON_SETUP( )
+#define RU864_GET_SUBBAND( )
+#define RU864_SET_SUBBAND( )
 #endif
 
 bool RegionIsActive( LoRaMacRegion_t region )
@@ -1034,6 +1075,50 @@ void RegionRxBeaconSetup( LoRaMacRegion_t region, RxBeaconSetup_t* rxBeaconSetup
         }
     }
 }
+
+uint8_t RegionGetSubband( LoRaMacRegion_t region )
+{
+    switch( region )
+    {
+        AS923_GET_SUBBAND( );
+        AU915_GET_SUBBAND( );
+        CN470_GET_SUBBAND( );
+        CN779_GET_SUBBAND( );
+        EU433_GET_SUBBAND( );
+        EU868_GET_SUBBAND( );
+        KR920_GET_SUBBAND( );
+        IN865_GET_SUBBAND( );
+        US915_GET_SUBBAND( );
+        RU864_GET_SUBBAND( );
+        default:
+        {
+            return 0;
+        }
+    }
+}
+
+LoRaMacStatus_t RegionSetSubband( LoRaMacRegion_t region, uint8_t subband )
+{
+    switch( region )
+    {
+        AS923_SET_SUBBAND( );
+        AU915_SET_SUBBAND( );
+        CN470_SET_SUBBAND( );
+        CN779_SET_SUBBAND( );
+        EU433_SET_SUBBAND( );
+        EU868_SET_SUBBAND( );
+        KR920_SET_SUBBAND( );
+        IN865_SET_SUBBAND( );
+        US915_SET_SUBBAND( );
+        RU864_SET_SUBBAND( );
+        default:
+        {
+            return 0;
+        }
+    }
+}
+
+
 
 Version_t RegionGetVersion( void )
 {

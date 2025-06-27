@@ -139,7 +139,7 @@ extern "C"
 /*!
  * Maximum number of times the MAC layer tries to get an acknowledge.
  */
-#define MAX_ACK_RETRIES                             8
+#define MAX_ACK_RETRIES                             24
 
 /*!
  * Frame direction definition for up-link communications
@@ -1150,6 +1150,11 @@ typedef struct sMlmeReq
      * MLME-Request return parameters
      */
     RequestReturnParam_t ReqReturn;
+
+    /*!
+     * the subband used previously
+     */
+    uint8_t subband;
 }MlmeReq_t;
 
 /*!
@@ -2390,6 +2395,13 @@ typedef struct sLoRaMacPrimitives
      * \param   [OUT] MLME-Confirm parameters
      */
     void ( *MacRetryTransmission )( uint8_t attempt );
+    /*!
+     * \brief   Return when LinkADRReq parsed or CFList received
+     *
+     * \param   [OUT] MLME-Confirm parameters
+     */
+    void ( *MacSubbandChanged )( uint8_t attempt );
+
 }LoRaMacPrimitives_t;
 
 /*!
@@ -2438,6 +2450,12 @@ typedef struct sLoRaMacCallback
      * \retval the device's AppEui
      */
     uint8_t* ( *GetAppEui )( void );
+    /*!
+     * \brief   Gets the current subband from the upper layer of the stack
+     * 
+     * \retval the current subband
+     */
+    uint8_t* ( *GetSubband )( void );
 }LoRaMacCallback_t;
 
 

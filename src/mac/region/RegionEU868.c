@@ -821,36 +821,7 @@ uint8_t RegionEU868DlChannelReq( DlChannelReqParams_t* dlChannelReq )
 
 int8_t RegionEU868AlternateDr( int8_t currentDr, AlternateDrType_t type )
 {
-    //return currentDr; //reverting to older version.
-    int8_t datarate = 0;
-
-    if( ( joinRequestCounter % 48 ) == 0 )
-    {
-        datarate = DR_0;
-    }
-    else if( ( joinRequestCounter % 32 ) == 0 )
-    {
-        datarate = DR_1;
-    }
-    else if( ( joinRequestCounter % 24 ) == 0 )
-    {
-        datarate = DR_2;
-    }
-    else if( ( joinRequestCounter % 16 ) == 0 )
-    {
-        datarate = DR_3;
-    }
-    else if( ( joinRequestCounter % 8 ) == 0 )
-    {
-        datarate = DR_4;
-    }
-    else
-    {
-        datarate = DR_5;
-    }
-    joinRequestCounter++;
-
-    return datarate;
+    return currentDr;
 }
 
 LoRaMacStatus_t RegionEU868NextChannel( NextChanParams_t* nextChanParams, uint8_t* channel, TimerTime_t* time, TimerTime_t* aggregatedTimeOff )
@@ -1018,4 +989,13 @@ void RegionEU868RxBeaconSetup( RxBeaconSetup_t* rxBeaconSetup, uint8_t* outDr )
 
     // Store downlink datarate
     *outDr = EU868_BEACON_CHANNEL_DR;
+}
+
+uint8_t RegionEU868GetSubband() {
+    DPRINT("No subbands in this region.");
+    return 0;
+}
+
+LoRaMacStatus_t RegionEU868SetSubband( uint8_t subband ) {
+    return LORAMAC_STATUS_OK;
 }

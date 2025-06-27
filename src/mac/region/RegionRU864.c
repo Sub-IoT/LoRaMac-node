@@ -959,3 +959,12 @@ void RegionRU864RxBeaconSetup( RxBeaconSetup_t* rxBeaconSetup, uint8_t* outDr )
     // Store downlink datarate
     *outDr = RU864_BEACON_CHANNEL_DR;
 }
+
+uint8_t RegionRU864GetSubband() {
+    DPRINT("No subbands in this region.");
+    return 0;
+}
+
+LoRaMacStatus_t RegionRU864SetSubband( uint8_t subband ) {
+    return LORAMAC_STATUS_OK;
+}

@@ -977,3 +977,12 @@ void RegionKR920RxBeaconSetup( RxBeaconSetup_t* rxBeaconSetup, uint8_t* outDr )
     // Store downlink datarate
     *outDr = KR920_BEACON_CHANNEL_DR;
 }
+
+uint8_t RegionKR920GetSubband() {
+    DPRINT("No subbands in this region.");
+    return 0;
+}
+
+LoRaMacStatus_t RegionKR920SetSubband( uint8_t subband ) {
+    return LORAMAC_STATUS_OK;
+}

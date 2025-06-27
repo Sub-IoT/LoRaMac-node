@@ -960,3 +960,12 @@ void RegionCN779RxBeaconSetup( RxBeaconSetup_t* rxBeaconSetup, uint8_t* outDr )
     // Store downlink datarate
     *outDr = CN779_BEACON_CHANNEL_DR;
 }
+
+uint8_t RegionCN779GetSubband() {
+    DPRINT("No subbands in this region.");
+    return 0;
+}
+
+LoRaMacStatus_t RegionCN779SetSubband( uint8_t subband ) {
+    return LORAMAC_STATUS_OK;
+}
