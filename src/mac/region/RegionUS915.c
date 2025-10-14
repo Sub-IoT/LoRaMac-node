@@ -994,11 +994,14 @@ uint8_t RegionUS915GetSubband() {
         }
         if(NvmCtx.ChannelsMask[i/2] == comparator ) 
         {
-            if(NvmCtx.ChannelsMask[4] == ( bitMask << i )) //8 LSBs of [4] contain the 500kHz channels  
-            {
-                subband = i+1; //lowest subband is FSB1, not FSB0
-                foundCount++;
-            }
+            subband = i+1; //lowest subband is FSB1, not FSB0
+            foundCount++;
+            // some LNSs do not allocate the 500kHz channel, so don't search for it here 
+            //if(NvmCtx.ChannelsMask[4] == ( bitMask << i )) //8 LSBs of [4] contain the 500kHz channels  
+            //{
+            //    subband = i+1; //lowest subband is FSB1, not FSB0
+            //    foundCount++;
+            //}
         }    
     }
     
@@ -1036,14 +1039,16 @@ LoRaMacStatus_t RegionUS915SetSubband( uint8_t subband ) {
                 // Enable a bank of 8 125kHz channels, 8 LSBs
                 NvmCtx.ChannelsMask[i/2] |= 0x00FF;
                 // Enable the corresponding 500kHz channel
-                NvmCtx.ChannelsMask[4] |= ( bitMask << i );
+                //NvmCtx.ChannelsMask[4] |= ( bitMask << i );
+                NvmCtx.ChannelsMask[4] &= ~( bitMask << i ); //do not assume 500kHz channel is available on rejoin (it can be re-enabled later by LNS) 
             }
             else
             {
                 // Enable a bank of 8 125kHz channels, 8 MSBs
                 NvmCtx.ChannelsMask[i/2] |= 0xFF00;
                 // Enable the corresponding 500kHz channel
-                NvmCtx.ChannelsMask[4] |= ( bitMask << i );
+                //NvmCtx.ChannelsMask[4] |= ( bitMask << i );
+                NvmCtx.ChannelsMask[4] &= ~( bitMask << i ); //do not assume 500kHz channel is available on rejoin (it can be re-enabled later by LNS) 
             }
         }
         else

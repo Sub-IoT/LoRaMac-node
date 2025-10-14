@@ -209,6 +209,13 @@ static void run_fsm()
             short_join_enabled = false;
         }
 
+        //if device managed to join before but its not using a recognised subband, continue to do a longer join
+        if(region == MODEM_REGION_US915 || region == MODEM_REGION_AU915 || region == MODEM_REGION_CN470) {
+            if(lorawan_get_subband() == 0) {
+                short_join_enabled = false;   
+            }
+        }
+
         uint8_t nbTrials = JOINREQ_NBTRIALS_LONG;
 
         if (short_join_enabled) {
@@ -400,22 +407,33 @@ static void mlme_confirm(MlmeConfirm_t* mlmeConfirm)
 
             join_state = STATE_JOINED;
 
-            lorawan_join_type_params_t enable_short_join
-                = { .short_join_enabled = true, .subband = 0, .short_joins_failed_counter = 0 };
-            int res = d7ap_fs_write_file(USER_FILE_LORAWAN_JOINTYPE_FILE_ID, 0, (const uint8_t*)&enable_short_join,
-                USER_FILE_LORAWAN_JOINTYPE_SIZE, ROOT_AUTH);
+            uint8_t short_join_enabled = true;
+            int res = d7ap_fs_write_file(USER_FILE_LORAWAN_JOINTYPE_FILE_ID, 0, &short_join_enabled,
+                1, ROOT_AUTH);
             if (res != SUCCESS) {
                 log_print_error_string("failed to enable short joins on USER_FILE_LORAWAN_JOINTYPE_FILE_ID file; long "
                                        "joins will continue to happen instead, err code: %u.",
                     res);
             }
-            // note: subband gets written in later via a call to subband_changed
+            // note: subband gets written either from Join-Accept, or from an ADR command
 
             MibRequestConfirm_t mibReq;
             mibReq.Type = MIB_ANTENNA_GAIN; // MAC parameters are reset in LoRaMac-Node on every join request sent, so
                                             // this should be set after a successful join
             mibReq.Param.AntennaGain = antenna_gain_f;
             LoRaMacMibSetRequestConfirm(&mibReq);
+
+            //if region is US915 or AU915, force use of DR_1 in following uplink
+            //b/c there is a chance LNS does not allocate a 500kHz channel
+            if(region == MODEM_REGION_US915 || region == MODEM_REGION_AU915) {
+                datarate = MODULE_LORAWAN_MINIMUM_DATARATE;
+                mibReq.Type = MIB_CHANNELS_DATARATE;
+                mibReq.Param.ChannelsDatarate = MODULE_LORAWAN_MINIMUM_DATARATE;
+                LoRaMacStatus_t err = LoRaMacMibSetRequestConfirm(&mibReq);
+                if (err != LORAMAC_STATUS_OK) {
+                    log_print_string("couldn't set DR properly");
+                }
+            }
 
             if (stack_status_callback)
                 stack_status_callback(LORAWAN_STACK_JOINED, mlmeConfirm->NbRetries);

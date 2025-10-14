@@ -3195,11 +3195,18 @@ static void AckTimeoutRetriesProcess( void )
             GetPhyParams_t getPhy;
             PhyParam_t phyParam;
 
-            getPhy.Attribute = PHY_NEXT_LOWER_TX_DR;
-            getPhy.UplinkDwellTime = MacCtx.NvmCtx->MacParams.UplinkDwellTime;
-            getPhy.Datarate = MacCtx.NvmCtx->MacParams.ChannelsDatarate;
+            // first try setting tx power to maximum. If that does not help then try dropping the data rate
+            getPhy.Attribute = PHY_MAX_TX_POWER; 
             phyParam = RegionGetPhyParam( MacCtx.NvmCtx->Region, &getPhy );
-            MacCtx.NvmCtx->MacParams.ChannelsDatarate = phyParam.Value;
+            if(MacCtx.NvmCtx->MacParams.ChannelsTxPower != (int8_t) phyParam.Value) {
+                MacCtx.NvmCtx->MacParams.ChannelsTxPower = phyParam.Value;
+            } else {
+                getPhy.Attribute = PHY_NEXT_LOWER_TX_DR;
+                getPhy.UplinkDwellTime = MacCtx.NvmCtx->MacParams.UplinkDwellTime;
+                getPhy.Datarate = MacCtx.NvmCtx->MacParams.ChannelsDatarate;
+                phyParam = RegionGetPhyParam( MacCtx.NvmCtx->Region, &getPhy );
+                MacCtx.NvmCtx->MacParams.ChannelsDatarate = phyParam.Value;
+            }    
         }
     }
 }
