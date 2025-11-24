@@ -75,6 +75,7 @@
 #include "hw.h"
 #include "modem_region.h"
 #include "scheduler.h"
+#include "timer.h"
 
 #if defined(MODULE_LORAWAN_LOG_ENABLED)
 #define DPRINT(...) log_print_stack_string(LOG_STACK_ALP, __VA_ARGS__)
@@ -251,7 +252,12 @@ static void run_fsm()
             if (status != LORAMAC_STATUS_OK) {
                 if (status == LORAMAC_STATUS_DUTYCYCLE_RESTRICTED) {
                     DPRINT("Duty cycle limit hit during join procedure; return join failed");
-                } else {
+                } else if (status == LORAMAC_STATUS_NO_FREE_CHANNEL_FOUND) {
+                    DPRINT("LBT check failed, reattempt join after 5s");
+                    timer_post_task_delay(&run_fsm, TIMER_TICKS_PER_SEC * 5);
+                    return;
+                } 
+                else {
                     log_print_error_string("Unexpected error: %u, return failure. Cancel join procedure.", status);
                 }
                 join_state = STATE_JOIN_FAILED;
@@ -683,9 +689,11 @@ static LoRaMacRegion_t lorawan_get_region()
     case MODEM_REGION_CN470: {
         return LORAMAC_REGION_CN470;
     }
+    case MODEM_REGION_KR920: {
+        return LORAMAC_REGION_KR920;
+    }
     case MODEM_REGION_CN779:
     case MODEM_REGION_EU433:
-    case MODEM_REGION_KR920:
     case MODEM_REGION_RU864:
     case MODEM_REGION_AS923_1_DUTY_CYCLE_DWELL_TIME:
     case MODEM_REGION_AS923_1_NO_RESTRICTIONS:
@@ -733,8 +741,8 @@ error_t lorawan_stack_init_otaa()
 
     // these callbacks are used by the LoRaMac to get the DevEui and AppEui when needed
     // in older versions the keys were provided with each join request. In current LoRaMac-node these are saved in an
-    // emulated secure element but in order to avoid duplication, we instead save them here and provide LoRaMac callbacks
-    // to access them
+    // emulated secure element but in order to avoid duplication, we instead save them here and provide LoRaMac
+    // callbacks to access them
     loraMacCallbacks.GetDevEui = &lorawan_get_deveui;
     loraMacCallbacks.GetAppEui = &lorawan_get_appeui;
 

@@ -48,6 +48,7 @@
 #include "LoRaMac.h"
 
 #include "scheduler.h"
+#include "timer.h"
 
 #ifndef LORAMAC_VERSION
 /*!
@@ -2588,6 +2589,26 @@ static LoRaMacStatus_t ScheduleTx( bool allowDelayedTx )
                     MacCtx.MacPrimitives->MacDutyDelay( MacCtx.DutyCycleWaitTime, MacCtx.AckTimeoutRetriesCounter); // callback to indicate to upper layer that a message has been delayed
             }
             return LORAMAC_STATUS_OK;
+        }
+        else if( ( status == LORAMAC_STATUS_NO_FREE_CHANNEL_FOUND ) &&
+            ( allowDelayedTx == true ) )
+        {
+            if( MacCtx.AckTimeoutRetriesCounter < MacCtx.AckTimeoutRetries )
+            {
+                // Allow delayed transmissions in the case of an LBT check fail (Korea and Japan only).
+                DPRINT("LBT check failed, delay the tx by 3s");
+                
+                MacCtx.AckTimeoutRetriesCounter++; //we count the LBT check as a transmission
+
+                TimerTime_t timeOffDelay = TIMER_TICKS_PER_SEC * 3;
+                MacCtx.MacState |= LORAMAC_TX_DELAYED;
+                TimerSetValue( &MacCtx.TxDelayedTimer, timeOffDelay );
+                TimerStart( &MacCtx.TxDelayedTimer );
+                MacCtx.MacPrimitives->MacDutyDelay( timeOffDelay, 1); // callback to indicate to upper layer that a message has been delayed
+                return LORAMAC_STATUS_OK;
+            } else {
+                return status;
+            }
         }
         else
         {// State where the MAC cannot send a frame

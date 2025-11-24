@@ -69,6 +69,7 @@ const struct Radio_s Radio =
     SX127xGetStatus, 
     SX127xSetModem,
     hw_radio_set_center_freq,
+    hw_radio_is_channel_free,
     hw_lora_random,
     SX127xSetRxConfig,        
     SX127xSetTxConfig,       
