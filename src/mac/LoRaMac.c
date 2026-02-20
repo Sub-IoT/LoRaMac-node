@@ -3211,6 +3211,10 @@ static void AckTimeoutRetriesProcess( void )
     if( MacCtx.AckTimeoutRetriesCounter < MacCtx.AckTimeoutRetries )
     {
         MacCtx.AckTimeoutRetriesCounter++;
+        
+        //data rate decay is handled in application layer instead via a call to:
+        //LoRaMacIncreaseTxPowerOrDecreaseDataRate();
+        /*
         if( ( MacCtx.AckTimeoutRetriesCounter % 2 ) == 1 )
         {
             GetPhyParams_t getPhy;
@@ -3229,6 +3233,7 @@ static void AckTimeoutRetriesProcess( void )
                 MacCtx.NvmCtx->MacParams.ChannelsDatarate = phyParam.Value;
             }    
         }
+        */
     }
 }
 
@@ -4916,4 +4921,22 @@ uint16_t lorawanGetDutyCycleWaitTime()
 {
     uint32_t elapsedTime = TimerGetElapsedTime(dutyCycleWaitStartTime);
     return (dutyCycleWaitTime != 0 && dutyCycleWaitTime > elapsedTime) ? (dutyCycleWaitTime - elapsedTime)/1000 : 0;
+}
+
+void LoRaMacIncreaseTxPowerOrDecreaseDataRate(){
+    GetPhyParams_t getPhy;
+    PhyParam_t phyParam;
+
+    // first try setting tx power to maximum. If that does not help then try dropping the data rate
+    getPhy.Attribute = PHY_MAX_TX_POWER; 
+    phyParam = RegionGetPhyParam( MacCtx.NvmCtx->Region, &getPhy );
+    if(MacCtx.NvmCtx->MacParams.ChannelsTxPower != (int8_t) phyParam.Value) {
+        MacCtx.NvmCtx->MacParams.ChannelsTxPower = phyParam.Value;
+    } else {
+        getPhy.Attribute = PHY_NEXT_LOWER_TX_DR;
+        getPhy.UplinkDwellTime = MacCtx.NvmCtx->MacParams.UplinkDwellTime;
+        getPhy.Datarate = MacCtx.NvmCtx->MacParams.ChannelsDatarate;
+        phyParam = RegionGetPhyParam( MacCtx.NvmCtx->Region, &getPhy );
+        MacCtx.NvmCtx->MacParams.ChannelsDatarate = phyParam.Value;
+    }
 }

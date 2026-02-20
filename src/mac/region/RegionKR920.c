@@ -562,7 +562,7 @@ bool RegionKR920TxConfig( TxConfigParams_t* txConfig, int8_t* txPower, TimerTime
 
     Radio.SetTxConfig( MODEM_LORA, phyTxPower, 0, bandwidth, phyDr, 1, 8, false, true, 0, 0, false, 4000 );
 
-    DPRINT( "TX on freq %d Hz at DR %d and TxPow %i \n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate, phyTxPower );
+    DPRINT( "TX on freq %d Hz at DR %d and TX Power %i \n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate, phyTxPower );
     
     // Setup maximum payload lenght of the radio driver
     Radio.SetMaxPayloadLength( MODEM_LORA, txConfig->PktLen );

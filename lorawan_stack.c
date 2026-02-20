@@ -93,6 +93,9 @@
 #define LORAWAN_APP_DATA_BUFF_SIZE 222 // TODO = max?
 
 #define SHORT_JOIN_ATTEMPTS_LIMIT 3
+#define APP_LAYER_RETRANSMISSIONS_LIMIT 1
+#define MAC_LAYER_RETRANSMISSIONS_LIMIT 4
+
 const modem_region_t region = MODULE_LORAWAN_REGION; // TODO: make AS923_x configurable
 
 typedef enum { STATE_NOT_JOINED, STATE_JOINED, STATE_JOIN_FAILED, STATE_JOINING } join_state_t;
@@ -125,15 +128,32 @@ static uint8_t joinRequestTrials = 0;
 
 static float antenna_gain_f = 0.0;
 
+static uint8_t app_retransmissions_counter = 0;
+
 /**
  * @brief Called everytime a LoRaWAN retransmission is executed.
  * This will be executed when joining or when nacks are received when an ack was requested
  * @param join_attempt_number
+ * 
+ * Maintain the same Data Rate and TX power while using the first used FCnt
+ * b/c of a known issue with retransmissions of confirmed frames
+ * after that, up tx power/reduce data rate in steps e.g.
+ * 
+ * DR_5/TX low /Fcnt 1, DR_5/TX low /Fcnt 1, DR_5/TX low/Fcnt 1, DR_5/TX low/Fcnt 1,
+ * DR_5/Tx low/Fcnt 2, DR_5/Tx high/Fcnt 2, DR_4/Tx high/Fcnt 2, DR_3/Tx high/Fcnt 2
  */
 static void network_retry_transmission(uint8_t attempt)
 {
+    uint8_t total_attempts = (app_retransmissions_counter * MAC_LAYER_RETRANSMISSIONS_LIMIT) + attempt;
+
+    if(join_state == STATE_JOINED) {
+        if(total_attempts > MAC_LAYER_RETRANSMISSIONS_LIMIT + 1) {
+            LoRaMacIncreaseTxPowerOrDecreaseDataRate();
+        }
+    }
+    
     if (stack_status_callback != NULL)
-        stack_status_callback(LORAWAN_STACK_RETRY_TRANSMISSION, attempt);
+        stack_status_callback(LORAWAN_STACK_RETRY_TRANSMISSION, total_attempts);
 }
 
 static void subband_changed(uint8_t new_subband)
@@ -350,8 +370,9 @@ uint16_t lorawan_get_duty_cycle_delay() { return lorawanGetDutyCycleWaitTime(); 
  */
 static void duty_cycle_delay_cb(uint32_t delay, uint8_t attempt)
 {
+    uint8_t total_attempts = (app_retransmissions_counter * MAC_LAYER_RETRANSMISSIONS_LIMIT) + attempt;
     if (stack_status_callback != NULL)
-        stack_status_callback(LORAWAN_STACK_DUTY_CYCLE_DELAY, attempt);
+        stack_status_callback(LORAWAN_STACK_DUTY_CYCLE_DELAY, total_attempts);
 }
 
 /**
@@ -363,15 +384,32 @@ static void mcps_confirm(McpsConfirm_t* McpsConfirm)
 {
     DPRINT("mcps_confirm: %i", McpsConfirm->AckReceived);
     lorawan_stack_status_t status = LORAWAN_STACK_ERROR_NACK;
+    bool retransmit = false;
     if (McpsConfirm != NULL) {
-        if (((McpsConfirm->McpsRequest == MCPS_CONFIRMED && McpsConfirm->AckReceived == 1)
-                || (McpsConfirm->McpsRequest == MCPS_UNCONFIRMED))
-            && McpsConfirm->Status == LORAMAC_EVENT_INFO_STATUS_OK)
-            status = LORAWAN_STACK_ERROR_OK;
-    } else
+        if(McpsConfirm->Status == LORAMAC_EVENT_INFO_STATUS_OK) {
+            if(McpsConfirm->McpsRequest == MCPS_UNCONFIRMED
+            || (McpsConfirm->McpsRequest == MCPS_CONFIRMED && McpsConfirm->AckReceived == 1) ) {
+                status = LORAWAN_STACK_ERROR_OK;
+            }
+        } else {
+            if(McpsConfirm->McpsRequest == MCPS_CONFIRMED && McpsConfirm->AckReceived != 1) {
+                if(app_retransmissions_counter < APP_LAYER_RETRANSMISSIONS_LIMIT) {
+                    //perform an app-layer retransmission (i.e. increment the FCnt and retransmit up to MAC_LAYER_RETRANSMISSIONS_LIMIT times more)
+                    app_retransmissions_counter++;
+                    retransmit = true;
+                } 
+            } 
+        }
+    } else {
         status = LORAWAN_STACK_ERROR_UNKNOWN;
-    tx_callback(status, McpsConfirm->NbRetries);
-    lorawan_transmitting = false;
+    }
+
+    if(!retransmit) {
+        tx_callback(status, McpsConfirm->NbRetries + (app_retransmissions_counter*MAC_LAYER_RETRANSMISSIONS_LIMIT));
+        lorawan_transmitting = false;
+    } else {
+        lorawan_stack_send_attempt(true); //triggers the app-layer retranmission
+    }
 }
 
 /**
@@ -826,38 +864,8 @@ void lorawan_stack_deinit()
     d7ap_fs_unregister_file_modified_callback(USER_FILE_LORAWAN_ANTENNA_GAIN_FILE_ID);
 }
 
-/**
- * @brief Sends data using LoRaWAN
- * @param payload
- * @param length
- * @param app_port
- * @param request_ack
- * @return lorawan stack status
- */
-lorawan_stack_status_t lorawan_stack_send(uint8_t* payload, uint8_t length, uint8_t app_port, bool request_ack)
+lorawan_stack_status_t lorawan_stack_send_attempt(bool request_ack)
 {
-
-    if (inited == false) {
-        log_print_error_string("TX not possible, not inited"); // Should not happen when using alp layer
-        return LORAWAN_STACK_ERROR_NOT_INITED;
-    }
-    if (!is_joined()) {
-        log_print_error_string("TX not possible, not joined"); // Should not happen when using alp layer
-        return LORAWAN_STACK_ERROR_NOT_JOINED;
-    }
-
-    if (lorawan_transmitting) {
-        DPRINT("TX not possible, already transmitting");
-        return LORAWAN_STACK_ALREADY_TRANSMITTING;
-    }
-
-    if (length > LORAWAN_APP_DATA_BUFF_SIZE)
-        return LORAWAN_STACK_ERROR_TX_NOT_POSSIBLE;
-
-    memcpy1(app_data.Buff, payload, length);
-    app_data.BuffSize = length;
-    app_data.Port = app_port;
-
     McpsReq_t mcpsReq;
     LoRaMacTxInfo_t txInfo;
     if (LoRaMacQueryTxPossible(app_data.BuffSize, &txInfo) != LORAMAC_STATUS_OK) {
@@ -893,7 +901,7 @@ lorawan_stack_status_t lorawan_stack_send(uint8_t* payload, uint8_t length, uint
         mcpsReq.Req.Confirmed.fPort = app_data.Port;
         mcpsReq.Req.Confirmed.fBuffer = app_data.Buff;
         mcpsReq.Req.Confirmed.fBufferSize = app_data.BuffSize;
-        mcpsReq.Req.Confirmed.NbTrials = 12;
+        mcpsReq.Req.Confirmed.NbTrials = MAC_LAYER_RETRANSMISSIONS_LIMIT;
         mcpsReq.Req.Confirmed.Datarate = datarate;
     }
 
@@ -904,9 +912,50 @@ lorawan_stack_status_t lorawan_stack_send(uint8_t* payload, uint8_t length, uint
         return LORAWAN_STACK_ERROR_UNKNOWN;
     }
 
-    lorawan_transmitting = true;
     return LORAWAN_STACK_ERROR_OK;
 }
+
+/**
+ * @brief Sends data using LoRaWAN
+ * @param payload
+ * @param length
+ * @param app_port
+ * @param request_ack
+ * @return lorawan stack status
+ */
+lorawan_stack_status_t lorawan_stack_send(uint8_t* payload, uint8_t length, uint8_t app_port, bool request_ack)
+{
+    DPRINT("LoRaWAN stack send");
+    if (inited == false) {
+        log_print_error_string("TX not possible, not inited"); // Should not happen when using alp layer
+        return LORAWAN_STACK_ERROR_NOT_INITED;
+    }
+    if (!is_joined()) {
+        log_print_error_string("TX not possible, not joined"); // Should not happen when using alp layer
+        return LORAWAN_STACK_ERROR_NOT_JOINED;
+    }
+
+    if (lorawan_transmitting) {
+        DPRINT("TX not possible, already transmitting");
+        return LORAWAN_STACK_ALREADY_TRANSMITTING;
+    }
+
+    if (length > LORAWAN_APP_DATA_BUFF_SIZE)
+        return LORAWAN_STACK_ERROR_TX_NOT_POSSIBLE;
+
+    memcpy1(app_data.Buff, payload, length);
+    app_data.BuffSize = length;
+    app_data.Port = app_port;
+
+    lorawan_stack_status_t status =  lorawan_stack_send_attempt(request_ack);
+
+    if(status == LORAWAN_STACK_ERROR_OK) {
+        lorawan_transmitting = true;
+        app_retransmissions_counter = 0;
+    }
+    return status;
+}
+
 
 /**
  * @brief returns saved devEui

@@ -594,7 +594,7 @@ bool RegionIN865TxConfig( TxConfigParams_t* txConfig, int8_t* txPower, TimerTime
     // Update time-on-air
     *txTimeOnAir = GetTimeOnAir( txConfig->Datarate, txConfig->PktLen );
 
-    DPRINT( "TX on freq %d Hz at DR %d\n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate );
+    DPRINT( "TX on freq %d Hz at DR %d and TX Power %d \n\r", NvmCtx.Channels[txConfig->Channel].Frequency, txConfig->Datarate, phyTxPower );
 
     // Setup maximum payload lenght of the radio driver
     Radio.SetMaxPayloadLength( modem, txConfig->PktLen );

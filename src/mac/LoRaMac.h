@@ -2782,6 +2782,12 @@ LoRaMacStatus_t LoRaMacDeInitialization( void );
  */
 uint16_t lorawanGetDutyCycleWaitTime();
 
+/** 
+ * @brief Increases the strength of the link, by either setting the TX power to
+ * the max (if it isn't already) or decreasing the data rate by 1. 
+ */
+void LoRaMacIncreaseTxPowerOrDecreaseDataRate();
+
 /*!
  * Automatically add the Region.h file at the end of LoRaMac.h file.
  * This is required because Region.h uses definitions from LoRaMac.h
