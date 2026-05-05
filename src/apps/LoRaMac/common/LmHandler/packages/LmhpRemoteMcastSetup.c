@@ -22,6 +22,8 @@
 #include "LmHandler.h"
 #include "LmhpRemoteMcastSetup.h"
 
+#ifdef MODULE_LORAWAN_MULTICAST_ON
+
 #define DBG_TRACE                                   1
 
 #if DBG_TRACE == 1
@@ -462,3 +464,5 @@ static void OnSessionStopTimer( void *context )
 
     LmhpRemoteMcastSetupState.SessionState = REMOTE_MCAST_SETUP_SESSION_STATE_STOP;
 }
+
+#endif //MODULE_LORAWAN_MULTICAST_ON

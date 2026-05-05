@@ -83,7 +83,8 @@ const struct Radio_s Radio =
     SX127xReadRssi,
     SX127xSetMaxPayloadLength,
     hw_lora_set_public_network,
-    SX127xGetWakeupTime
+    SX127xGetWakeupTime,
+    NULL
 };
 
 void   SX127xIoInit ( void ) {

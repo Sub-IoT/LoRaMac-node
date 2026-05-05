@@ -59,7 +59,19 @@ ENDIF()
 SET_PROPERTY(CACHE ${MODULE_PREFIX}_MINIMUM_DATARATE PROPERTY STRINGS "DR_0;DR_1;DR_2;DR_3")
 
 IF(NOT DEFINED ${MODULE_PREFIX}_DEFAULT_ANTENNA_GAIN)
-    SET(ANTENNA_GAIN "2.15f")
+    IF(${${MODULE_PREFIX}_REGION} STREQUAL "MODEM_REGION_EU868")
+        SET(ANTENNA_GAIN "1.0f")
+    ELSEIF(${${MODULE_PREFIX}_REGION} STREQUAL "MODEM_REGION_US915")
+        SET(ANTENNA_GAIN "15.0f")
+    ELSEIF(${${MODULE_PREFIX}_REGION} STREQUAL "MODEM_REGION_AS923_1_DUTY_CYCLE" OR ${${MODULE_PREFIX}_REGION} STREQUAL "MODEM_REGION_AS923_1_DUTY_CYCLE_DWELL_TIME" OR ${${MODULE_PREFIX}_REGION} STREQUAL "MODEM_REGION_AS923_1_NO_RESTRICTIONS" OR ${${MODULE_PREFIX}_REGION} STREQUAL "MODEM_REGION_AS923_2" OR ${${MODULE_PREFIX}_REGION} STREQUAL "MODEM_REGION_AS923_3" OR ${${MODULE_PREFIX}_REGION} STREQUAL "MODEM_REGION_AS923_4")
+        SET(ANTENNA_GAIN "1.0f")
+    ELSEIF(${${MODULE_PREFIX}_REGION} STREQUAL "MODEM_REGION_AU915")
+        SET(ANTENNA_GAIN "15.0f")
+    ELSEIF(${${MODULE_PREFIX}_REGION} STREQUAL "MODEM_REGION_IN865")
+        SET(ANTENNA_GAIN "15.0f")
+    ELSEIF(${${MODULE_PREFIX}_REGION} STREQUAL "MODEM_REGION_KR920")
+        SET(ANTENNA_GAIN "0.0f")
+    ENDIF()
     MODULE_PARAM(${MODULE_PREFIX}_DEFAULT_ANTENNA_GAIN ${ANTENNA_GAIN} STRING  "Default antenna gain used")
 ENDIF()
 
@@ -70,6 +82,9 @@ MODULE_OPTION(${MODULE_PREFIX}_MULTICAST_ON "Enables multicast mode and includes
 
 MODULE_OPTION(LORAMAC_CLASSB_ENABLED "Enables Class B mode and includes required functions at compile time" FALSE)
 
+MODULE_OPTION(${MODULE_PREFIX}_LCTT_TEST_MODE "Enable LCTT Test Mode (for pre-certification and certification testing)" FALSE)
+MODULE_HEADER_DEFINE(BOOL ${MODULE_PREFIX}_LCTT_TEST_MODE)
+
 MODULE_HEADER_DEFINE(
     BOOL ${MODULE_PREFIX}_LOG_ENABLED
     ID ${MODULE_PREFIX}_MINIMUM_DATARATE
@@ -77,6 +92,7 @@ MODULE_HEADER_DEFINE(
     ID ${MODULE_PREFIX}_REGION
     NUMBER ${MODULE_PREFIX}_DEFAULT_ANTENNA_GAIN
     BOOL ${MODULE_PREFIX}_MULTICAST_ON
+    BOOL ${MODULE_PREFIX}_LCTT_TEST_MODE 
     BOOL LORAMAC_CLASSB_ENABLED
     ID ${ACTIVE_R}
 )
@@ -110,6 +126,21 @@ ELSEIF(${${MODULE_PREFIX}_REGION} STREQUAL "MODEM_REGION_KR920")
     SET(BASE "src/mac/region/RegionKR920.c")
 ENDIF()
 
+#LCTT builds require additional libs and use lctt_stack.c instead of lorawan_stack.c
+IF(${${MODULE_PREFIX}_LCTT_TEST_MODE})
+    SET(LCTT_FILES  "src/apps/LoRaMac/common/NvmCtxMgmt.c"
+                    "src/apps/LoRaMac/common/LmHandler/LmHandler.c"
+                    "src/apps/LoRaMac/common/LmHandler/packages/LmhpCompliance.c"
+                    "src/apps/LoRaMac/common/LmHandler/packages/LmhpClockSync.c")
+    SET(LCTT_FOLDERS    "src/apps/LoRaMac/common"  
+                        "src/apps/LoRaMac/common/LmHandler"
+                        "src/apps/LoRaMac/common/LmHandler/packages")
+    SET(STACK_FILE "lctt_stack.c")
+ELSE()
+    SET(LCTT_FILES "")
+    SET(LCTT_FOLDERS "")
+    SET(STACK_FILE "lorawan_stack.c")
+ENDIF()
 
 #By convention, each module should generate a single 'static' library that can be included by the application
 ADD_LIBRARY(lorawan STATIC
@@ -135,7 +166,8 @@ ST/BSP/MLM32L07X01/mlm32l07x01.c    # TODO only for lrwan1 board
 ST/hw_rtc.c
 ST/low_power.c
 ST/stm32l0xx_hw.c   # TODO remove?
-lorawan_stack.c
+${STACK_FILE}
+${LCTT_FILES}
 )
 
 
@@ -145,6 +177,7 @@ ADD_DEFINITIONS("-DUSE_B_L072Z_LRWAN1" "-DSTM32L072xx" "-DREGION_${${MODULE_PREF
 GET_PROPERTY(__global_include_dirs GLOBAL PROPERTY GLOBAL_INCLUDE_DIRECTORIES)
 target_include_directories(lorawan PUBLIC
     src/mac
+    src/mac/Region
     src/system
     src/boards
     src/peripherals/soft-se
@@ -153,6 +186,7 @@ target_include_directories(lorawan PUBLIC
     ${__global_include_dirs}
     ${CMAKE_BINARY_DIR}/framework/ #framework_defs.h
     ${CMAKE_CURRENT_BINARY_DIR} # MODULE_LORAWAN_defs.h
+    ${LCTT_FOLDERS}
 )
 
 TARGET_LINK_LIBRARIES(lorawan PRIVATE d7ap_fs)

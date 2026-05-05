@@ -246,12 +246,13 @@ static void LmhpFragmentationProcess( void )
 {
     LmhpFragmentationTxDelayStates_t delayTimerState;
 
-    CRITICAL_SECTION_BEGIN( );
+    BACKUP_PRIMASK();
+    DISABLE_IRQ();
     delayTimerState = LmhpFragmentationState.TxDelayState;
     // Set the state to idle so that the other states are executed only when they are set
     // in the appropriate functions.
     LmhpFragmentationState.TxDelayState = FRAGMENTATION_TX_DELAY_STATE_IDLE;
-    CRITICAL_SECTION_END( );
+    RESTORE_PRIMASK( );
 
     switch( delayTimerState )
     {

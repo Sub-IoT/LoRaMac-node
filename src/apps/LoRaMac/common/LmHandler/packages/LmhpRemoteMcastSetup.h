@@ -26,6 +26,8 @@
 #include "LmHandlerTypes.h"
 #include "LmhPackage.h"
 
+#ifdef MODULE_LORAWAN_MULTICAST_ON
+
 /*!
  * Remote multicast setup package identifier.
  *
@@ -43,5 +45,7 @@
 //}LmhpRemoteMcastSetupParams_t;
 
 LmhPackage_t *LmhpRemoteMcastSetupPackageFactory( void );
+
+#endif // MODULE_LORAWAN_MULTICAST_ON
 
 #endif // __LMHP_REMOTE_MCAST_SETUP_H__

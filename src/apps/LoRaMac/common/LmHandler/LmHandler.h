@@ -220,7 +220,7 @@ typedef struct LmHandlerCallbacks_s
  * \retval none
  */
 LmHandlerErrorStatus_t LmHandlerInit( LmHandlerCallbacks_t *callbacks,
-                                      LmHandlerParams_t *handlerParams );
+                                      LmHandlerParams_t *handlerParams, uint8_t* appKey );
 
 /*!
  * Indicates if the LoRaMacHandler is busy

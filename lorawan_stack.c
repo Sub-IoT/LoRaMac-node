@@ -85,12 +85,11 @@
 #define DPRINT_DATA(p, n)
 #endif
 
-// TODO configurable
-#define LORAWAN_PUBLIC_NETWORK_ENABLED 1 // TODO configurable?
-#define LORAWAN_CLASS CLASS_A // TODO configurable?
-#define JOINREQ_NBTRIALS_LONG 48 // (>=48 according to spec)
+#define LORAWAN_PUBLIC_NETWORK_ENABLED 1
+#define LORAWAN_CLASS CLASS_A
+#define JOINREQ_NBTRIALS_LONG 48
 #define JOINREQ_NBTRIALS_SHORT 3
-#define LORAWAN_APP_DATA_BUFF_SIZE 222 // TODO = max?
+#define LORAWAN_APP_DATA_BUFF_SIZE 242
 
 #define SHORT_JOIN_ATTEMPTS_LIMIT 3
 #define APP_LAYER_RETRANSMISSIONS_LIMIT 1
@@ -475,7 +474,7 @@ static void mlme_confirm(MlmeConfirm_t* mlmeConfirm)
                 mibReq.Param.ChannelsDatarate = MODULE_LORAWAN_MINIMUM_DATARATE;
                 LoRaMacStatus_t err = LoRaMacMibSetRequestConfirm(&mibReq);
                 if (err != LORAMAC_STATUS_OK) {
-                    log_print_string("couldn't set DR properly");
+                    DPRINT("couldn't set DR properly");
                 }
             }
 
@@ -962,14 +961,14 @@ lorawan_stack_status_t lorawan_stack_send(uint8_t* payload, uint8_t length, uint
  *
  * @return lorawan devEui
  */
-static uint8_t* lorawan_get_deveui(void) { return devEui; }
+uint8_t* lorawan_get_deveui(void) { return devEui; }
 
 /**
  * @brief returns saved AppEui
  *
  * @return lorawan appEui (in LoRaWAN 1.1, name is changed to   joinEui)
  */
-static uint8_t* lorawan_get_appeui(void) { return appEui; }
+uint8_t* lorawan_get_appeui(void) { return appEui; }
 
 /**
  * @brief returns saved subband

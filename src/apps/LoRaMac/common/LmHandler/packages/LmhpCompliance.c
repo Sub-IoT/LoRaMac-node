@@ -25,7 +25,7 @@
 #include "timer.h"
 #include "LoRaMac.h"
 #include "LoRaMacTest.h"
-#include "Region.h"
+//#include "Region.h"
 #include "LmhPackage.h"
 #include "LmhpCompliance.h"
 
@@ -40,7 +40,7 @@
  * Defines the compliance mode data transmission duty cycle.
  * An uplink will be transmitted ever \ref COMPLIANCE_TX_DUTYCYCLE [ms].
  */
-#define COMPLIANCE_TX_DUTYCYCLE                     5000
+#define COMPLIANCE_TX_DUTYCYCLE                     10000
 
 /*!
  * LoRaWAN compliance tests support data
@@ -277,13 +277,29 @@ static void LmhpComplianceOnMcpsIndication( McpsIndication_t* mcpsIndication )
         return;
     }
 
-    if( mcpsIndication->Port != COMPLIANCE_PORT )
+    if( mcpsIndication->Port == 0 )
     {
-        return;
+        
+        //from spec:
+        //The DUT creates a 16-bit unsigned counter (called RxAppCnt) which is incremented each
+        //time the DUT receives an applicative downlink frame (FPort > 0). An empty downlink frame
+        //with FCtrl ACK bit set SHALL be considered as and applicative downlink.
+
+        //so this is wrong...
+        //need to check where the ACK bit of the FCtrl gets stored
+        //and if that is false, return here
+        //but also apparently the counter should get incremented even if the compliance port is not used
+        //so factor in that too
+        if(!mcpsIndication->AckReceived) {
+            return;
+        }
     }
 
     if( ComplianceTestState.IsRunning == false )
     {
+        if( mcpsIndication->Port != COMPLIANCE_PORT ) {
+            return;
+        }
         // Check compliance test enable command (i)
         if( ( mcpsIndication->BufferSize == 4 ) &&
             ( mcpsIndication->Buffer[0] == 0x01 ) &&
@@ -323,9 +339,10 @@ static void LmhpComplianceOnMcpsIndication( McpsIndication_t* mcpsIndication )
             TimerSetValue( &ComplianceTxNextPacketTimer, COMPLIANCE_TX_DUTYCYCLE );
 
             // Confirm compliance test protocol activation
-            CRITICAL_SECTION_BEGIN( );
+            BACKUP_PRIMASK();
+            DISABLE_IRQ();
             ComplianceTestState.TxPending = true; //LmhpComplianceTxProcess( );
-            CRITICAL_SECTION_END( );
+            RESTORE_PRIMASK( );
         }
     }
     else
@@ -333,6 +350,9 @@ static void LmhpComplianceOnMcpsIndication( McpsIndication_t* mcpsIndication )
         // Increment the compliance certification protocol downlink counter
         ComplianceTestState.DownLinkCounter++;
 
+        if( mcpsIndication->Port != COMPLIANCE_PORT ) {
+            return;
+        }
         // Parse compliance test protocol
         ComplianceTestState.State = mcpsIndication->Buffer[0];
         switch( ComplianceTestState.State )
@@ -475,10 +495,11 @@ static void LmhpComplianceProcess( void )
 {
     bool isPending;
 
-    CRITICAL_SECTION_BEGIN( );
+    BACKUP_PRIMASK();
+    DISABLE_IRQ();
     isPending = ComplianceTestState.TxPending;
     ComplianceTestState.TxPending = false;
-    CRITICAL_SECTION_END( );
+    RESTORE_PRIMASK( );
     if( isPending == true )
     {
         LmhpComplianceTxProcess( );

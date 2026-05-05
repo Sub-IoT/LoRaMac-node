@@ -33,14 +33,20 @@
 #include "LmhPackage.h"
 #include "LmhpCompliance.h"
 #include "LmhpClockSync.h"
+
+#include "lorawan_stack.h"
+
+#ifdef MODULE_LORAWAN_MULTICAST_ON
 #include "LmhpRemoteMcastSetup.h"
 #include "LmhpFragmentation.h"
 
-#ifndef ACTIVE_REGION
+#endif
+
+#ifndef MODULE_LORAWAN_REGION
 
 #warning "No active region defined, LORAMAC_REGION_EU868 will be used as default."
 
-#define ACTIVE_REGION LORAMAC_REGION_EU868
+#define MODULE_LORAWAN_REGION LORAMAC_REGION_EU868
 
 #endif
 
@@ -210,8 +216,13 @@ static void LmHandlerPackagesNotify( PackageNotifyTypes_t notifyType, void *para
 
 static void LmHandlerPackagesProcess( void );
 
+static void MacDutyDelayIgnore( uint32_t delay, uint8_t attempt ) {return;}
+static void MacRetryTransmissionIgnore( uint8_t attempt ) {return;}
+static void MacSubbandChangedIgnore( uint8_t new_subband ) {return;}
+
+
 LmHandlerErrorStatus_t LmHandlerInit( LmHandlerCallbacks_t *handlerCallbacks,
-                                      LmHandlerParams_t *handlerParams )
+                                      LmHandlerParams_t *handlerParams , uint8_t* appKey)
 {
     //
     MibRequestConfirm_t mibReq;
@@ -222,10 +233,18 @@ LmHandlerErrorStatus_t LmHandlerInit( LmHandlerCallbacks_t *handlerCallbacks,
     LoRaMacPrimitives.MacMcpsIndication = McpsIndication;
     LoRaMacPrimitives.MacMlmeConfirm = MlmeConfirm;
     LoRaMacPrimitives.MacMlmeIndication = MlmeIndication;
+    LoRaMacPrimitives.MacDutyDelay = MacDutyDelayIgnore;
+    LoRaMacPrimitives.MacRetryTransmission = MacRetryTransmissionIgnore;
+    LoRaMacPrimitives.MacSubbandChanged = MacSubbandChangedIgnore;
+
+
     LoRaMacCallbacks.GetBatteryLevel = LmHandlerCallbacks->GetBatteryLevel;
     LoRaMacCallbacks.GetTemperatureLevel = LmHandlerCallbacks->GetTemperature;
     LoRaMacCallbacks.NvmContextChange = NvmCtxMgmtEvent;
     LoRaMacCallbacks.MacProcessNotify = LmHandlerCallbacks->OnMacProcess;
+
+    LoRaMacCallbacks.GetDevEui = &lorawan_get_deveui;
+    LoRaMacCallbacks.GetAppEui = &lorawan_get_appeui;
 
     IsClassBSwitchPending = false;
 
@@ -250,9 +269,14 @@ LmHandlerErrorStatus_t LmHandlerInit( LmHandlerCallbacks_t *handlerCallbacks,
         LoRaMacMibGetRequestConfirm( &mibReq );
         memcpy1( CommissioningParams.JoinEui, mibReq.Param.JoinEui, 8 );
 
-        mibReq.Type = MIB_SE_PIN;
+        /*mibReq.Type = MIB_SE_PIN;
         LoRaMacMibGetRequestConfirm( &mibReq );
-        memcpy1( CommissioningParams.SePin, mibReq.Param.SePin, 4 );
+        memcpy1( CommissioningParams.SePin, mibReq.Param.SePin, 4 );*/
+
+        mibReq.Type = MIB_NWK_KEY;
+        mibReq.Param.NwkKey = appKey; 
+        LoRaMacMibSetRequestConfirm( &mibReq );
+
 
 #if( OVER_THE_AIR_ACTIVATION == 0 )
         // Tell the MAC layer which network server version are we connecting too.
@@ -328,7 +352,8 @@ void LmHandlerProcess( void )
     }
 
     // Processes the LoRaMac events
-    LoRaMacProcess( );
+    //LoRaMacProcess( );
+    sched_post_task(&LoRaMacProcess);
 
     // Call all packages process functions
     LmHandlerPackagesProcess( );
@@ -707,13 +732,13 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
         // We schedule an uplink as soon as possible to flush the server.
 
         // Send an empty message
-        LmHandlerAppData_t appData =
+        LmHandlerAppData_t appDataEmpty =
         {
             .Buffer = NULL,
             .BufferSize = 0,
             .Port = 0
         };
-        LmHandlerSend( &appData, LORAMAC_HANDLER_UNCONFIRMED_MSG );
+        LmHandlerSend( &appDataEmpty, LORAMAC_HANDLER_UNCONFIRMED_MSG );
     }
 }
 
@@ -897,6 +922,7 @@ LmHandlerErrorStatus_t LmHandlerPackageRegister( uint8_t id, void *params )
             package = LmphClockSyncPackageFactory( );
             break;
         }
+        #ifdef MODULE_LORAWAN_MULTICAST_ON
         case PACKAGE_ID_REMOTE_MCAST_SETUP:
         {
             package = LmhpRemoteMcastSetupPackageFactory( );
@@ -907,6 +933,7 @@ LmHandlerErrorStatus_t LmHandlerPackageRegister( uint8_t id, void *params )
             package = LmhpFragmentationPackageFactory( );
             break;
         }
+        #endif // MODULE_LORAWAN_MULTICAST_ON
     }
     if( package != NULL )
     {

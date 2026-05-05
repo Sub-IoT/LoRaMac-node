@@ -2019,7 +2019,6 @@ static void ProcessMacCommands( uint8_t *payload, uint8_t macIndex, uint8_t comm
                     // Process the ADR requests
                     status = RegionLinkAdrReq( MacCtx.NvmCtx->Region, &linkAdrReq, &linkAdrDatarate,
                                                &linkAdrTxPower, &linkAdrNbRep, &linkAdrNbBytesParsed );
-
                     if( ( status & 0x07 ) == 0x07 )
                     {
                         MacCtx.NvmCtx->MacParams.ChannelsDatarate = linkAdrDatarate;
@@ -2110,7 +2109,6 @@ static void ProcessMacCommands( uint8_t *payload, uint8_t macIndex, uint8_t comm
                 chParam.DrRange.Value = payload[macIndex++];
 
                 status = RegionNewChannelReq( MacCtx.NvmCtx->Region, &newChannelReq );
-
                 macCmdPayload[0] = status;
                 LoRaMacCommandsAddCmd( MOTE_MAC_NEW_CHANNEL_ANS, macCmdPayload, 1 );
                 if( status == 0x03 )

@@ -67,7 +67,7 @@ extern "C"
 /*!
  * Maximal datarate that can be used by the node
  */
-#define EU868_TX_MAX_DATARATE                       DR_7
+#define EU868_TX_MAX_DATARATE                       DR_5 // no DR_7, do not allow FSK
 
 /*!
  * Minimal datarate that can be used by the node
@@ -77,7 +77,7 @@ extern "C"
 /*!
  * Maximal datarate that can be used by the node
  */
-#define EU868_RX_MAX_DATARATE                       DR_7
+#define EU868_RX_MAX_DATARATE                       DR_5 // no DR_7, do not allow FSK
 
 /*!
  * Default datarate used by the node
