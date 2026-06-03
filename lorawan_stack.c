@@ -85,7 +85,6 @@
 #define DPRINT_DATA(p, n)
 #endif
 
-#define LORAWAN_PUBLIC_NETWORK_ENABLED 1
 #define LORAWAN_CLASS CLASS_A
 #define JOINREQ_NBTRIALS_LONG 48
 #define JOINREQ_NBTRIALS_SHORT 3
@@ -792,10 +791,6 @@ error_t lorawan_stack_init_otaa()
     }
 
     MibRequestConfirm_t mibReq;
-
-    mibReq.Type = MIB_PUBLIC_NETWORK;
-    mibReq.Param.EnablePublicNetwork = LORAWAN_PUBLIC_NETWORK_ENABLED;
-    LoRaMacMibSetRequestConfirm(&mibReq);
 
     mibReq.Type = MIB_DEVICE_CLASS;
     mibReq.Param.Class = LORAWAN_CLASS;
